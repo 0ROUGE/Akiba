@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 30% 8%;
+  --card: 220 40% 98%;
+  --card-foreground: 222 30% 8%;
+  --muted: 220 30% 95%;
+  --muted-foreground: 222 15% 40%;
+  --border: 220 25% 89%;
+  --primary: 221 83% 33%;
+  --primary-foreground: 0 0% 100%;
+  --ink: 222 30% 8%;
+  --ink-foreground: 0 0% 100%;
+  --success: 142 71% 35%;
+  --warning: 32 95% 44%;
+  --danger: 0 72% 51%;
+  --radius: 16px;
+}
+
+.dark {
+  --background: 224 32% 6%;
+  --foreground: 220 30% 96%;
+  --card: 224 28% 10%;
+  --card-foreground: 220 30% 96%;
+  --muted: 224 24% 14%;
+  --muted-foreground: 220 15% 65%;
+  --border: 224 20% 18%;
+  --primary: 213 94% 68%;
+  --primary-foreground: 224 32% 6%;
+  --ink: 220 30% 96%;
+  --ink-foreground: 224 32% 6%;
+  --success: 142 65% 45%;
+  --warning: 32 90% 55%;
+  --danger: 0 80% 62%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
