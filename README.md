@@ -1,5 +1,6 @@
 # AKIBA
 
+
 Personal savings and spending-control app for M-Pesa users in Kenya. Deposit
 via M-Pesa STK Push, allocate into goals and a weekly allowance, withdraw via
 M-Pesa B2C. The "AKIBA Balance" is always computed from confirmed ledger
