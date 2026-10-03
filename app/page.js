@@ -83,21 +83,34 @@ export default function LandingPage() {
           </Link>
         </div>
 
-        <div className="mt-16 grid gap-5 sm:grid-cols-3">
-          {features.map(({ icon: Icon, title, body }, i) => (
-            <motion.div
-              key={title}
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.5, delay: i * 0.06 }}
-              className="rounded-xl border border-border p-5"
-            >
-              <Icon size={22} className="text-primary" />
-              <h3 className="mt-3 font-display text-base font-medium">{title}</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
-            </motion.div>
-          ))}
+        {/* Zigzag on desktop: each row alternates sides and steps down,
+            so the same column width reads as full instead of a thin centered
+            strip. Collapses to the original stacked layout on mobile. */}
+        <div className="relative mt-20">
+          <div className="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-border md:block" />
+          <div className="space-y-6 md:space-y-10">
+            {features.map(({ icon: Icon, title, body }, i) => (
+              <motion.div
+                key={title}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ duration: 0.5, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                className={`flex items-start gap-4 md:w-[56%] ${
+                  i % 2 === 1 ? "md:ml-auto md:flex-row-reverse md:text-right" : ""
+                }`}
+                style={{ marginTop: i === 0 ? 0 : undefined }}
+              >
+                <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-soft">
+                  <Icon size={19} className="text-primary" />
+                </span>
+                <div className={i % 2 === 1 ? "md:text-right" : ""}>
+                  <h3 className="font-display text-base font-medium">{title}</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
 
         <p className="mt-14 text-sm text-muted-foreground">
