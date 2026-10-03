@@ -6,8 +6,30 @@
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": ["window-controls-overlay", "tabbed", "standalone"],
   "orientation": "portrait-primary",
+  "launch_handler": { "client_mode": "focus-existing" },
+  "edge_side_panel": { "preferred_width": 400 },
+  "note_taking": { "new_note_url": "/dashboard/goals?new=1" },
+  "protocol_handlers": [
+    { "protocol": "web+akiba", "url": "/dashboard?action=%s" }
+  ],
+  "file_handlers": [
+    {
+      "action": "/dashboard/account",
+      "accept": { "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"], "image/webp": [".webp"] }
+    }
+  ],
+  "share_target": {
+    "action": "/api/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [{ "name": "files", "accept": ["image/*"] }]
+    }
+  },
   "lang": "en-KE",
   "dir": "ltr",
   "background_color": "#ffffff",

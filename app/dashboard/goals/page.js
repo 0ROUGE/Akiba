@@ -4,7 +4,7 @@ import { NewGoalDialog } from "@/components/new-goal-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlusCircle } from "lucide-react";
 
-export default async function GoalsPage() {
+export default async function GoalsPage({ searchParams }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -23,7 +23,9 @@ export default async function GoalsPage() {
       </div>
 
       <div className="max-w-[220px]">
-        <NewGoalDialog />
+        {/* note_taking manifest entry ("new idea" = a new savings goal here)
+            points at ?new=1, so a long-press launch opens straight into this. */}
+        <NewGoalDialog defaultOpen={searchParams?.new === "1"} />
       </div>
 
       {goals?.length ? (

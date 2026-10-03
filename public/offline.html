@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AKIBA — Offline</title>
+<style>
+  html,body{height:100%;margin:0;background:#fff;color:#0b0d12;font-family:-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;}
+  .badge{width:56px;height:56px;border-radius:999px;background:#14328C;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;margin-bottom:18px;}
+  h1{font-size:18px;margin:0 0 8px;}
+  p{color:#5b6472;font-size:14px;max-width:320px;margin:0;}
+  button{margin-top:20px;padding:10px 20px;border-radius:10px;border:1px solid #e4e8f0;background:#fff;font-size:14px;cursor:pointer;}
+  @media (prefers-color-scheme: dark){
+    html,body{background:#0a0e17;color:#f0f3f8;}
+    p{color:#9aa4b2;}
+    button{background:#0a0e17;border-color:#1e2230;color:#f0f3f8;}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="badge">A</div>
+    <h1>You're offline</h1>
+    <p>AKIBA needs a connection to show your real balance and confirm transactions — nothing here is ever shown as a guess.</p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>

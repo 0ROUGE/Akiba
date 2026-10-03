@@ -1,5 +1,6 @@
 import { Space_Grotesk, IBM_Plex_Sans } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import "./globals.css";
 
 const display = Space_Grotesk({
@@ -46,6 +47,7 @@ export default function RootLayout({ children }) {
     <html lang="en" suppressHydrationWarning>
       <body className={`${display.variable} ${body.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ServiceWorkerRegister />
           {children}
         </ThemeProvider>
       </body>

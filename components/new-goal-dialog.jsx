@@ -8,10 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 
-export function NewGoalDialog() {
+export function NewGoalDialog({ defaultOpen = false }) {
   const supabase = createClient();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ name: "", target_amount: "", target_date: "" });

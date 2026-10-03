@@ -57,6 +57,40 @@ wired, just needs secrets):
   callback URLs (Safaricom needs a public HTTPS URL, so this won't work from
   `localhost` — test it from a deployed preview).
 
+## PWA capabilities
+Built out for a clean [PWABuilder](https://www.pwabuilder.com/) report:
+- **Service Worker** (`public/sw.js`), registered unconditionally on every
+  page load via `components/service-worker-register.jsx` — not just when a
+  user opts into push, which is what PWABuilder's "no Service Worker found"
+  check was actually catching before.
+  - **Has Logic / Offline Support**: network-first for pages with a cached
+    shell + `public/offline.html` fallback; cache-first for static assets.
+    Deliberately never caches `/dashboard/*` or `/api/*` — balance and
+    transaction data must come from the network or be shown as offline,
+    never served stale from a cache.
+  - **Background Sync**: a deposit/withdrawal made while offline queues
+    locally (`lib/offline-queue.js`) and retries automatically the moment
+    connectivity returns, via the `sync` event in the service worker.
+  - **Periodic Sync**: opportunistically refreshes the cached shell. Most
+    browsers (iOS Safari included) never grant this permission — it's a
+    progressive enhancement, nothing depends on it firing.
+  - **Push Notifications**: as before.
+- **App Capabilities** (all in `public/manifest.json`):
+  - `launch_handler` (focus existing window), `edge_side_panel`
+  - `protocol_handlers` — `web+akiba:` deep links into `/dashboard?action=…`
+  - `file_handlers` — "Open with → AKIBA" on an image sets it as your
+    profile photo (handled via `launchQueue` in the Account page)
+  - `share_target` — AKIBA appears in the OS share sheet for images; shared
+    photos upload straight to your profile (`/api/share-target`)
+  - `note_taking` — `new_note_url` opens straight into the New Goal dialog
+    (`/dashboard/goals?new=1`), the closest real equivalent AKIBA has to
+    "jot something down quickly"
+  - `display_override` includes `tabbed` and `window-controls-overlay`
+- **Not implemented — Widgets**: the Windows 11 Widgets Board needs a full
+  Adaptive Card template + a dedicated data endpoint per widget, is
+  Windows/Edge-only, and has no natural fit for a savings app's data. Left
+  out rather than added as an empty checkbox.
+
 ## Environment variables
 Copy `.env.example` to `.env.local` and fill in:
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — from the

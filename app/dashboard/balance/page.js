@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowDownToLine, ArrowUpFromLine, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +10,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionRow } from "@/components/transaction-row";
 import { formatKES } from "@/lib/utils";
+import { enqueueRequest, registerBackgroundSync } from "@/lib/offline-queue";
 
 // STK Push / B2C initiation happen server-side in /api/mpesa/stk-push and
 // /api/mpesa/b2c. This page calls them and then relies on realtime to
@@ -16,6 +18,7 @@ import { formatKES } from "@/lib/utils";
 // never marks a transaction successful on its own.
 export default function BalancePage() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const [modal, setModal] = useState(null); // "deposit" | "withdraw" | null
@@ -70,17 +73,42 @@ export default function BalancePage() {
     };
   }, [supabase, loadData]);
 
+  // Opens the right modal straight away when linked to with ?action=deposit
+  // or ?action=withdraw — used by the dashboard quick actions and by the
+  // web+akiba: protocol handler.
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action === "deposit" || action === "withdraw") setModal(action);
+  }, [searchParams]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
     setFeedback(null);
     const endpoint = modal === "deposit" ? "/api/mpesa/stk-push" : "/api/mpesa/b2c";
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: Number(amount) }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const body = { amount: Number(amount) };
+
+    let res, data;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      // No network at all (not a server error) — queue it for Background
+      // Sync to retry automatically the moment connectivity returns.
+      enqueueRequest({ endpoint, body });
+      await registerBackgroundSync();
+      setSubmitting(false);
+      setFeedback({
+        type: "error",
+        text: "You're offline — this will be sent automatically once you're back online.",
+      });
+      return;
+    }
+
     setSubmitting(false);
     if (!res.ok) {
       setFeedback({ type: "error", text: data.error || "Couldn't reach M-Pesa right now. Try again shortly." });
