@@ -23,42 +23,52 @@ export default function BalancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
-  const load = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const [{ data: balanceRow }, { data: txs }] = await Promise.all([
-      supabase.from("akiba_balances").select("balance").eq("user_id", user.id).maybeSingle(),
-      supabase
-        .from("ledger_transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .in("type", ["deposit", "withdrawal"])
-        .order("created_at", { ascending: false })
-        .limit(20),
-    ]);
-    setBalance(balanceRow?.balance ?? 0);
-    setTransactions(txs ?? []);
-
-    const channel = supabase
-      .channel("balance-updates")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "ledger_transactions", filter: `user_id=eq.${user.id}` },
-        () => load()
-      )
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, [supabase]);
+  // Fetches data only — never touches the realtime channel, so calling this
+  // on every change event can't multiply subscriptions (that was the bug:
+  // the old version re-subscribed on every update, leaking a channel each
+  // time and making the page progressively slower the longer it stayed open).
+  const loadData = useCallback(
+    async (userId) => {
+      const [{ data: balanceRow }, { data: txs }] = await Promise.all([
+        supabase.from("akiba_balances").select("balance").eq("user_id", userId).maybeSingle(),
+        supabase
+          .from("ledger_transactions")
+          .select("*")
+          .eq("user_id", userId)
+          .in("type", ["deposit", "withdrawal"])
+          .order("created_at", { ascending: false })
+          .limit(20),
+      ]);
+      setBalance(balanceRow?.balance ?? 0);
+      setTransactions(txs ?? []);
+    },
+    [supabase]
+  );
 
   useEffect(() => {
-    let cleanup;
-    load().then((fn) => (cleanup = fn));
-    return () => cleanup?.();
-  }, [load]);
+    let channel;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await loadData(user.id);
+
+      channel = supabase
+        .channel(`balance-updates-${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "ledger_transactions", filter: `user_id=eq.${user.id}` },
+          () => loadData(user.id)
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [supabase, loadData]);
 
   async function handleSubmit(e) {
     e.preventDefault();

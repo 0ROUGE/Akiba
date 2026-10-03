@@ -1,13 +1,45 @@
 {
-  "name": "AKIBA",
+  "name": "AKIBA — Save with intention",
   "short_name": "AKIBA",
-  "description": "Save with intention — deposit from M-Pesa, allocate to goals, track spending.",
+  "description": "Deposit from M-Pesa, split it into savings goals and a weekly allowance, and withdraw back to your phone whenever you need to. AKIBA is a ledger and controls layer on top of real M-Pesa transactions.",
+  "id": "/dashboard",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "portrait-primary",
+  "lang": "en-KE",
+  "dir": "ltr",
   "background_color": "#ffffff",
   "theme_color": "#14328C",
+  "categories": ["finance", "productivity"],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Deposit",
+      "short_name": "Deposit",
+      "description": "Start an M-Pesa deposit into your AKIBA balance",
+      "url": "/dashboard/balance?action=deposit",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Savings goals",
+      "short_name": "Goals",
+      "description": "View and add savings goals",
+      "url": "/dashboard/goals",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Spending",
+      "short_name": "Spending",
+      "description": "See where your allocated money is going",
+      "url": "/dashboard/spending",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
 }
