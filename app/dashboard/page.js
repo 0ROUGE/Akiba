@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { PlusCircle, ArrowDownToLine, ArrowUpFromLine, Target } from "lucide-react";
+import { PlusCircle, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BalanceCard } from "@/components/balance-card";
 import { GoalCard } from "@/components/goal-card";
 import { TransactionRow } from "@/components/transaction-row";
+import { NewGoalDialog } from "@/components/new-goal-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default async function DashboardHomePage() {
   const supabase = createClient();
@@ -59,18 +60,13 @@ export default async function DashboardHomePage() {
             <span className="text-xs">Withdraw</span>
           </Button>
         </Link>
-        <Link href="/dashboard?newGoal=1">
-          <Button variant="outline" className="w-full flex-col gap-1.5 py-4 h-auto">
-            <Target size={18} />
-            <span className="text-xs">New goal</span>
-          </Button>
-        </Link>
+        <NewGoalDialog />
       </div>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-lg font-medium">Savings goals</h2>
-          <Link href="/dashboard/balance" className="text-sm font-medium text-primary">
+          <Link href="/dashboard/goals" className="text-sm font-medium text-primary">
             View all
           </Link>
         </div>

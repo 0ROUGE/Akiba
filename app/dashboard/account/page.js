@@ -14,6 +14,7 @@ export default function AccountPage() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
   const [pushStatus, setPushStatus] = useState(null);
+  const [resetStatus, setResetStatus] = useState(null);
 
   async function handleEnablePush() {
     setPushStatus("loading");
@@ -23,6 +24,15 @@ export default function AccountPage() {
     } catch {
       setPushStatus("error");
     }
+  }
+
+  async function handleChangePassword() {
+    if (!profile?.email) return;
+    setResetStatus("loading");
+    const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    setResetStatus(error ? "error" : "sent");
   }
 
   useEffect(() => {
@@ -60,7 +70,12 @@ export default function AccountPage() {
       <Card>
         <CardContent className="divide-y divide-border p-0">
           <Row icon={ShieldCheck} label="Two-factor authentication" value={profile?.two_factor_enabled ? "Enabled" : "Not set up"} />
-          <Row icon={KeyRound} label="Change password" />
+          <Row
+            icon={KeyRound}
+            label="Change password"
+            value={resetStatus === "sent" ? "Email sent" : resetStatus === "loading" ? "Sending…" : resetStatus === "error" ? "Couldn't send" : undefined}
+            onClick={handleChangePassword}
+          />
           <Row
             icon={Bell}
             label="Push notifications"

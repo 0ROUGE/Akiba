@@ -26,23 +26,50 @@ entries — it never claims to read your real M-Pesa wallet.
   `push_subscriptions` row — no server round trip needed for this part).
 - Avatar upload to Supabase Storage (`avatars` bucket, owner-scoped policies).
 
-**Not yet built (next phase — server-side, Daraja-dependent):**
-- `generate-2fa-secret` / `verify-2fa` edge functions (TOTP secret must be
-  generated and checked server-side, never in the browser).
-- `initiate-stk-push` + its Safaricom callback webhook.
-- `initiate-b2c-withdrawal` + its Safaricom callback webhook.
-- Edge function that sends Web Push on ledger/notification events.
-The frontend already calls these by name via `supabase.functions.invoke(...)`,
-so wiring them up is a drop-in once written.
+**Also done (backend, as Next.js Route Handlers on Vercel rather than
+Supabase Edge Functions — same "server-side, keys never touch the client"
+guarantee, same domain as the app so cookies work cleanly):**
+- `/api/2fa/generate` + `/api/2fa/verify` — TOTP secret generated and
+  checked server-side, stored AES-256-GCM encrypted; verify also sets an
+  httpOnly `akiba_2fa_ok` cookie (scoped to the user id) so 2FA is enforced
+  on every login, not just setup — see `lib/supabase/middleware.js`.
+- `/api/mpesa/stk-push` + `/api/mpesa/stk-callback` — real Daraja STK Push
+  integration (`lib/mpesa.js`). A ledger row starts `pending` and only the
+  callback (Safaricom calling back into the app) ever marks it `confirmed`
+  or `failed`.
+- `/api/mpesa/b2c` + `/api/mpesa/b2c-callback` — same pattern for
+  withdrawals. Checks the confirmed balance before initiating (not yet
+  row-locked against a double-submit race — fine pre-launch, worth hardening
+  with a `FOR UPDATE` Postgres function before real traffic).
+- `lib/notify.js` — writes the in-app `notifications` row and fans it out as
+  a real Web Push (via `web-push`, using the VAPID keys below) whenever a
+  deposit/withdrawal confirms or fails.
+
+**Still needs real credentials before it's live** (code is complete and
+wired, just needs secrets):
+- Daraja: `DARAJA_CONSUMER_KEY/SECRET/SHORTCODE/PASSKEY` (sandbox creds from
+  the [Safaricom Developer Portal](https://developer.safaricom.co.ke)) plus
+  `DARAJA_INITIATOR_NAME`/`DARAJA_SECURITY_CREDENTIAL` for B2C withdrawals.
+- `TOTP_ENCRYPTION_KEY` — generate with `openssl rand -base64 32`, set as a
+  Vercel **Secret**.
+- `NEXT_PUBLIC_APP_URL` — your real Vercel domain, used to build the Daraja
+  callback URLs (Safaricom needs a public HTTPS URL, so this won't work from
+  `localhost` — test it from a deployed preview).
 
 ## Environment variables
 Copy `.env.example` to `.env.local` and fill in:
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — from the
   Supabase project dashboard (Project Settings → API).
-- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — generate with
-  `npx web-push generate-vapid-keys`.
-- `SUPABASE_SERVICE_ROLE_KEY`, `DARAJA_*` — only needed once edge functions
-  are added; set them as Supabase secrets, not in the Next.js app.
+- `SUPABASE_SERVICE_ROLE_KEY` — same page, **Secret** in Vercel. Used only by
+  `/api/mpesa/*` routes to write confirmed transactions (bypassing RLS,
+  which deliberately blocks client-side inserts to `ledger_transactions`).
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — a real keypair is
+  already generated and in `.env.example`; rotate it with
+  `npx web-push generate-vapid-keys` if you want your own.
+- `TOTP_ENCRYPTION_KEY`, `DARAJA_*` — see above.
+- `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` / `NEXT_PUBLIC_CLOUDINARY_API_KEY` /
+  `CLOUDINARY_API_SECRET` — only needed if you move profile photos off
+  Supabase Storage onto Cloudinary; not wired up yet.
 
 ## Local dev
 ```bash

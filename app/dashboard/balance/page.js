@@ -10,11 +10,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TransactionRow } from "@/components/transaction-row";
 import { formatKES } from "@/lib/utils";
 
-// STK Push / B2C initiation happen in the `initiate-stk-push` and
-// `initiate-b2c-withdrawal` edge functions (next build phase). This page
-// calls them and then relies on realtime to reflect the confirmed/failed
-// state once Safaricom's callback lands — it never marks a transaction
-// successful on its own.
+// STK Push / B2C initiation happen server-side in /api/mpesa/stk-push and
+// /api/mpesa/b2c. This page calls them and then relies on realtime to
+// reflect the confirmed/failed state once Safaricom's callback lands — it
+// never marks a transaction successful on its own.
 export default function BalancePage() {
   const supabase = createClient();
   const [balance, setBalance] = useState(0);
@@ -65,11 +64,16 @@ export default function BalancePage() {
     e.preventDefault();
     setSubmitting(true);
     setFeedback(null);
-    const fn = modal === "deposit" ? "initiate-stk-push" : "initiate-b2c-withdrawal";
-    const { error } = await supabase.functions.invoke(fn, { body: { amount: Number(amount) } });
+    const endpoint = modal === "deposit" ? "/api/mpesa/stk-push" : "/api/mpesa/b2c";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: Number(amount) }),
+    });
+    const data = await res.json().catch(() => ({}));
     setSubmitting(false);
-    if (error) {
-      setFeedback({ type: "error", text: "Couldn't reach M-Pesa right now. Try again shortly." });
+    if (!res.ok) {
+      setFeedback({ type: "error", text: data.error || "Couldn't reach M-Pesa right now. Try again shortly." });
       return;
     }
     setFeedback({

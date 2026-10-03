@@ -6,15 +6,12 @@ import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { createClient } from "@/lib/supabase/client";
-
-// NOTE: secret generation + code verification happen server-side in the
-// `generate-2fa-secret` / `verify-2fa` edge functions (next build phase) so the
-// TOTP secret is only ever written to `profiles.two_factor_secret` from
-// trusted server code, never from the browser.
+// Secret generation + code verification happen server-side in
+// /api/2fa/generate and /api/2fa/verify, so the TOTP secret is only ever
+// written to `profiles.two_factor_secret` (encrypted) from trusted server
+// code, never from the browser.
 export default function TwoFactorSetupPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [otpauthUrl, setOtpauthUrl] = useState(null);
   const [manualKey, setManualKey] = useState(null);
   const [code, setCode] = useState("");
@@ -24,8 +21,9 @@ export default function TwoFactorSetupPage() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.functions.invoke("generate-2fa-secret");
-      if (error) {
+      const res = await fetch("/api/2fa/generate", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
         setError("Couldn't start 2FA setup. Refresh to try again.");
       } else {
         setOtpauthUrl(data.otpauth_url);
@@ -33,21 +31,25 @@ export default function TwoFactorSetupPage() {
       }
       setLoading(false);
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleVerify(e) {
     e.preventDefault();
     setError("");
     setVerifying(true);
-    const { data, error } = await supabase.functions.invoke("verify-2fa", {
-      body: { code },
+    const res = await fetch("/api/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
     });
+    const data = await res.json().catch(() => ({}));
     setVerifying(false);
-    if (error || !data?.verified) {
+    if (!res.ok || !data.verified) {
       setError("That code didn't match. Check your app and try again.");
       return;
     }
     router.replace("/dashboard");
+    router.refresh();
   }
 
   return (
