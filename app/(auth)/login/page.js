@@ -8,7 +8,7 @@ import { Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
-import { supportsPlatformPasskey } from "@/lib/webauthn-support";
+import { supportsPlatformPasskey, describePasskeyError } from "@/lib/webauthn-support";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,16 +27,22 @@ export default function LoginPage() {
   async function handlePasskeyLogin() {
     setError("");
     setPasskeyLoading(true);
-    const { error } = await supabase.auth.signInWithPasskey();
-    setPasskeyLoading(false);
-    if (error) {
-      if (!error.message?.toLowerCase().includes("cancel")) {
-        setError("Couldn't sign in with that passkey. Use your password instead.");
+    try {
+      const { error } = await supabase.auth.signInWithPasskey();
+      setPasskeyLoading(false);
+      if (error) {
+        const message = describePasskeyError(error, { mode: "signin" });
+        if (message) setError(message);
+        return;
       }
-      return;
+      router.replace("/dashboard");
+      router.refresh();
+    } catch {
+      // Belt-and-braces: never let a WebAuthn ceremony take the whole page
+      // down, even if something throws instead of resolving with {error}.
+      setPasskeyLoading(false);
+      setError("Couldn't sign in with that passkey. Use your password instead.");
     }
-    router.replace("/dashboard");
-    router.refresh();
   }
 
   async function handleSubmit(e) {
@@ -72,24 +78,7 @@ export default function LoginPage() {
         <h1 className="mt-8 font-display text-2xl font-semibold">Welcome back</h1>
         <p className="mt-1 text-sm text-muted-foreground">Log in to see your balance and goals.</p>
 
-        {passkeySupported && (
-          <>
-            <Button
-              variant="ink"
-              className="mt-8 w-full gap-2"
-              onClick={handlePasskeyLogin}
-              disabled={passkeyLoading}
-            >
-              <Fingerprint size={18} />
-              {passkeyLoading ? "Check your device…" : "Sign in with biometrics"}
-            </Button>
-            <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-              <div className="h-px flex-1 bg-border" /> or use your password <div className="h-px flex-1 bg-border" />
-            </div>
-          </>
-        )}
-
-        <form onSubmit={handleSubmit} className={passkeySupported ? "space-y-4" : "mt-8 space-y-4"}>
+        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" required autoComplete="email"
@@ -103,9 +92,26 @@ export default function LoginPage() {
 
           {error && <p className="text-sm text-danger">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Logging in…" : "Log in"}
-          </Button>
+          {/* Biometrics sits beside Log in, not above the form — a quick
+              shortcut once you've used it before, not the headline action. */}
+          <div className="flex gap-2">
+            {passkeySupported && (
+              <Button
+                type="button"
+                variant="ink"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={handlePasskeyLogin}
+                disabled={passkeyLoading}
+                aria-label="Sign in with biometrics"
+              >
+                <Fingerprint size={18} className={passkeyLoading ? "animate-pulse" : ""} />
+              </Button>
+            )}
+            <Button type="submit" className="flex-1" disabled={loading}>
+              {loading ? "Logging in…" : "Log in"}
+            </Button>
+          </div>
         </form>
 
         <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">

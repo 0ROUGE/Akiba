@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Fingerprint, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { supportsPlatformPasskey } from "@/lib/webauthn-support";
+import { supportsPlatformPasskey, describePasskeyError } from "@/lib/webauthn-support";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 
@@ -31,17 +31,19 @@ export function PasskeyManager() {
   async function handleRegister() {
     setError("");
     setRegistering(true);
-    const { error } = await supabase.auth.registerPasskey();
-    setRegistering(false);
-    if (error) {
-      setError(
-        error.message?.includes("cancel")
-          ? "Cancelled."
-          : "Couldn't register this device. Make sure biometrics/screen lock is set up on it."
-      );
-      return;
+    try {
+      const { error } = await supabase.auth.registerPasskey();
+      setRegistering(false);
+      if (error) {
+        const message = describePasskeyError(error, { mode: "register" });
+        if (message) setError(message);
+        return;
+      }
+      await loadPasskeys();
+    } catch {
+      setRegistering(false);
+      setError("Couldn't register this device. Make sure a screen lock or biometric is set up on it.");
     }
-    await loadPasskeys();
   }
 
   async function handleDelete(passkeyId) {

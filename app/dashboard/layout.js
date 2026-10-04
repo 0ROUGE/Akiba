@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
+import { IdleLogoutGuard } from "@/components/idle-logout-guard";
 
 export default async function DashboardLayout({ children }) {
   const supabase = createClient();
@@ -14,6 +15,7 @@ export default async function DashboardLayout({ children }) {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
+      <IdleLogoutGuard />
       <main className="pb-24 md:ml-60 md:pb-10">
         <div className="mx-auto max-w-3xl px-5 pt-8 sm:px-8">{children}</div>
       </main>
