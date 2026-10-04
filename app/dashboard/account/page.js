@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { EditProfileDialog } from "@/components/edit-profile-dialog";
+import { PasskeyManager } from "@/components/passkey-manager";
 
 const PUSH_ERROR_MESSAGES = {
   unsupported: "Not supported in this browser",
@@ -146,6 +147,7 @@ export default function AccountPage() {
       <Card>
         <CardContent className="divide-y divide-border p-0">
           <Row icon={ShieldCheck} label="Two-factor authentication" value={profile?.two_factor_enabled ? "Enabled" : "Not set up"} />
+          <PasskeyManager />
           <Row
             icon={KeyRound}
             label="Change password"

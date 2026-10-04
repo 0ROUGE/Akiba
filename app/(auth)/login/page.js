@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { supportsPlatformPasskey } from "@/lib/webauthn-support";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +17,27 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+
+  useEffect(() => {
+    supportsPlatformPasskey().then(setPasskeySupported);
+  }, []);
+
+  async function handlePasskeyLogin() {
+    setError("");
+    setPasskeyLoading(true);
+    const { error } = await supabase.auth.signInWithPasskey();
+    setPasskeyLoading(false);
+    if (error) {
+      if (!error.message?.toLowerCase().includes("cancel")) {
+        setError("Couldn't sign in with that passkey. Use your password instead.");
+      }
+      return;
+    }
+    router.replace("/dashboard");
+    router.refresh();
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -49,7 +72,24 @@ export default function LoginPage() {
         <h1 className="mt-8 font-display text-2xl font-semibold">Welcome back</h1>
         <p className="mt-1 text-sm text-muted-foreground">Log in to see your balance and goals.</p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        {passkeySupported && (
+          <>
+            <Button
+              variant="ink"
+              className="mt-8 w-full gap-2"
+              onClick={handlePasskeyLogin}
+              disabled={passkeyLoading}
+            >
+              <Fingerprint size={18} />
+              {passkeyLoading ? "Check your device…" : "Sign in with biometrics"}
+            </Button>
+            <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+              <div className="h-px flex-1 bg-border" /> or use your password <div className="h-px flex-1 bg-border" />
+            </div>
+          </>
+        )}
+
+        <form onSubmit={handleSubmit} className={passkeySupported ? "space-y-4" : "mt-8 space-y-4"}>
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" required autoComplete="email"

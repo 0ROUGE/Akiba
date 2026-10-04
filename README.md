@@ -91,6 +91,38 @@ Built out for a clean [PWABuilder](https://www.pwabuilder.com/) report:
   Windows/Edge-only, and has no natural fit for a savings app's data. Left
   out rather than added as an empty checkbox.
 
+## Biometric sign-in (Passkeys)
+Face ID / Touch ID / Android fingerprint / Windows Hello, via Supabase
+Auth's native Passkeys (beta — built on WebAuthn, no separate library):
+- `lib/supabase/client.js` opts into the experimental API
+  (`auth: { experimental: { passkey: true } }`)
+- `components/passkey-manager.jsx` (Account page) — register this device,
+  list and remove registered passkeys
+- `app/(auth)/login/page.js` — "Sign in with biometrics" button when the
+  device supports a platform authenticator (feature-detected; hidden
+  otherwise), falling back to password underneath
+
+**One manual step you need to do, per environment, once you have a real
+domain:** Supabase Dashboard → **Authentication → Passkeys** → enable, then
+set:
+- **Relying Party ID**: your bare domain, e.g. `akiba.vercel.app` (no
+  `https://`, no path)
+- **Relying Party Origins**: the full origin(s) that serve the app, e.g.
+  `https://akiba.vercel.app`
+
+This can't be filled in generically — it has to match whatever domain the
+app is actually served from, and a passkey registered against one RP ID
+won't work from another. If you add a custom domain later, update this (and
+expect previously-registered passkeys tied to the old domain to stop
+working — that's inherent to how WebAuthn binds credentials to an origin,
+not a bug).
+
+Passkey sign-in currently still goes through AKIBA's own TOTP 2FA gate
+afterwards (middleware doesn't know a login came via passkey vs password).
+That's arguably redundant — a passkey is already phishing-resistant and
+device-bound — but it errs toward not silently weakening a security
+requirement. Worth revisiting once passkey adoption is clear.
+
 ## Environment variables
 Copy `.env.example` to `.env.local` and fill in:
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — from the
