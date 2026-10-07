@@ -1,4 +1,7 @@
-import { ArrowDownLeft, ArrowUpRight, PiggyBank, ShoppingBag } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, PiggyBank, ShoppingBag, RefreshCw } from "lucide-react";
 import { formatKES, formatDate } from "@/lib/utils";
 
 const typeConfig = {
@@ -14,8 +17,18 @@ const statusConfig = {
   failed: "text-danger",
 };
 
-export function TransactionRow({ tx }) {
+// onCheckStatus is only passed for pending deposits — lets the person ask
+// Safaricom directly instead of waiting on a callback that might have been
+// missed (see /api/mpesa/stk-status).
+export function TransactionRow({ tx, onCheckStatus }) {
   const { icon: Icon, label, sign } = typeConfig[tx.type] ?? typeConfig.spend;
+  const [checking, setChecking] = useState(false);
+
+  async function handleCheck() {
+    setChecking(true);
+    await onCheckStatus(tx.id);
+    setChecking(false);
+  }
 
   return (
     <div className="flex items-center gap-3 py-3">
@@ -30,9 +43,20 @@ export function TransactionRow({ tx }) {
         <p className="text-sm font-medium tabular-nums">
           {sign} {formatKES(tx.amount)}
         </p>
-        <p className={`text-xs capitalize ${statusConfig[tx.mpesa_transaction_status] ?? ""}`}>
-          {tx.mpesa_transaction_status}
-        </p>
+        {tx.mpesa_transaction_status === "pending" && onCheckStatus ? (
+          <button
+            onClick={handleCheck}
+            disabled={checking}
+            className="flex items-center gap-1 text-xs text-primary disabled:opacity-60"
+          >
+            <RefreshCw size={11} className={checking ? "animate-spin" : ""} />
+            {checking ? "Checking…" : "Check status"}
+          </button>
+        ) : (
+          <p className={`text-xs capitalize ${statusConfig[tx.mpesa_transaction_status] ?? ""}`}>
+            {tx.mpesa_transaction_status}
+          </p>
+        )}
       </div>
     </div>
   );

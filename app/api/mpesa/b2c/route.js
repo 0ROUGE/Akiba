@@ -59,17 +59,21 @@ export async function POST(request) {
 
     try {
       const resultUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/mpesa/b2c-callback`;
+      // Generated here (not by Safaricom) because v3 requires the caller to
+      // supply it — this is also what the callback gets matched back on.
+      const originatorConversationId = crypto.randomUUID();
       const result = await b2cPayout({
         phone: profile.phone,
         amount,
         remarks: `AKIBA-${tx.id.slice(0, 8)}`,
         resultUrl,
         timeoutUrl: resultUrl,
+        originatorConversationId,
       });
 
       await admin
         .from("ledger_transactions")
-        .update({ mpesa_receipt_number: result.ConversationID })
+        .update({ mpesa_receipt_number: originatorConversationId })
         .eq("id", tx.id);
 
       return NextResponse.json({ status: "pending", conversationId: result.ConversationID });

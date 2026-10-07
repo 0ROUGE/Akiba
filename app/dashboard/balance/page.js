@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionRow } from "@/components/transaction-row";
+import { AllowancePlans } from "@/components/allowance-plans";
 import { formatKES } from "@/lib/utils";
 import { enqueueRequest, registerBackgroundSync } from "@/lib/offline-queue";
 
@@ -81,6 +82,21 @@ export default function BalancePage() {
     if (action === "deposit" || action === "withdraw") setModal(action);
   }, [searchParams]);
 
+  async function handleCheckStatus(transactionId) {
+    const res = await fetch("/api/mpesa/stk-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transactionId }),
+    });
+    await res.json().catch(() => ({}));
+    // Realtime will normally pick up the row change already, but refresh
+    // explicitly too in case the websocket missed it.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await loadData(user.id);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
@@ -140,12 +156,20 @@ export default function BalancePage() {
         </Button>
       </div>
 
+      <AllowancePlans balance={balance} />
+
       <section>
         <h2 className="mb-1 font-display text-lg font-medium">Transaction history</h2>
         <Card>
           <CardContent className="divide-y divide-border p-0 px-5">
             {transactions.length ? (
-              transactions.map((tx) => <TransactionRow key={tx.id} tx={tx} />)
+              transactions.map((tx) => (
+                <TransactionRow
+                  key={tx.id}
+                  tx={tx}
+                  onCheckStatus={tx.type === "deposit" ? handleCheckStatus : undefined}
+                />
+              ))
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 No deposits or withdrawals yet.

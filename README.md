@@ -57,6 +57,55 @@ wired, just needs secrets):
   callback URLs (Safaricom needs a public HTTPS URL, so this won't work from
   `localhost` — test it from a deployed preview).
 
+## Money movement — bugs found and fixed, plus automatic allowances
+
+**B2C withdrawals were failing on every attempt** ("Bad Request - Invalid
+OriginatorConversationID"). Root cause: Daraja's B2C **v3** endpoint requires
+the caller to generate and send `OriginatorConversationID` — unlike v1,
+Safaricom does not default it. `lib/mpesa.js` now generates one per request;
+it's also what `/api/mpesa/b2c-callback` matches the result against (not
+Safaricom's own `ConversationID`, which the callback also doesn't key the
+response on for v3).
+
+**Deposits were getting stuck at 'pending' forever** when a callback got
+missed (e.g. `NEXT_PUBLIC_APP_URL` pointing somewhere unreachable during
+setup). Since the Vercel Hobby plan caps cron at once a day, waiting for a
+scheduled sweep could mean hours stuck pending. Fixed two ways:
+- A real "Check status" action now appears next to any pending deposit in
+  the Balance page's transaction list (`/api/mpesa/stk-status`) — asks
+  Safaricom's STK Push Query API directly what actually happened and
+  updates the row for real. Never guesses, never marks something confirmed
+  without Daraja's own ResultCode saying so.
+- `/api/cron/daily` also sweeps any deposit still pending after 20s as a
+  backstop (`lib/reconcile.js`).
+
+**Security fix while wiring up goal allocation**: `allocate_to_goal()` is a
+`SECURITY DEFINER` Postgres function reachable directly via RPC. It never
+verified the caller actually owned the account they passed as `p_user_id`
+— any authenticated user could have drained an arbitrary account's balance
+by passing that account's user id. Fixed with an `auth.uid() = p_user_id`
+check (plus a goal-ownership check) before anything else runs.
+
+**Allocate to goals now actually works** — `GoalCard` has a real "Allocate
+funds" button calling `allocate_to_goal()` via `supabase.rpc(...)` directly
+(it's `SECURITY DEFINER`, so no API route needed — the function itself
+checks balance and moves the money atomically).
+
+**Automatic allowances** (`payout_schedules` table, `components/
+allowance-plans.jsx`, Balance page): lock part of your balance into a plan
+— "KES 1000, release KES 500 weekly" or "KES 1000, release ~143/day" — and
+`/api/cron/daily` pays out each installment as a real M-Pesa B2C transfer
+automatically, once a day, via Vercel Cron (`vercel.json`, scheduled
+`0 4 * * *` = ~7am Nairobi time; Hobby plan fires sometime within that
+hour, not to the minute). Cancelling a plan immediately pays out whatever's
+left as one final release rather than stranding it — "cancel" means "give
+me the rest now," not "forfeit it."
+
+Known limitation shared with goal allocation: locking funds into a plan is
+one-way at the ledger level (same convention `allocate_to_goal` already
+used) — there's no "un-allocate back to spendable balance without actually
+receiving the M-Pesa payout" path yet.
+
 ## PWA capabilities
 Built out for a clean [PWABuilder](https://www.pwabuilder.com/) report:
 - **Service Worker** (`public/sw.js`), registered unconditionally on every

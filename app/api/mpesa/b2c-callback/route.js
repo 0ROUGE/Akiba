@@ -3,11 +3,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify";
 
 // Safaricom's B2C result callback. Shape: { Result: { ConversationID,
-// ResultCode, ResultDesc, ResultParameters: { ResultParameter: [...] } } }
+// OriginatorConversationID, ResultCode, ResultDesc, ResultParameters: {...} } }
+// Matched on OriginatorConversationID — the id WE generated when initiating
+// (v3 requires us to supply it), not Safaricom's own ConversationID.
 export async function POST(request) {
   const body = await request.json().catch(() => null);
   const result = body?.Result;
-  if (!result?.ConversationID) {
+  if (!result?.OriginatorConversationID) {
     return NextResponse.json({ ResultCode: 0, ResultDesc: "Ignored" });
   }
 
@@ -15,7 +17,7 @@ export async function POST(request) {
   const { data: tx } = await admin
     .from("ledger_transactions")
     .select("id, user_id, amount")
-    .eq("mpesa_receipt_number", result.ConversationID)
+    .eq("mpesa_receipt_number", result.OriginatorConversationID)
     .eq("type", "withdrawal")
     .maybeSingle();
 
@@ -31,7 +33,7 @@ export async function POST(request) {
       .from("ledger_transactions")
       .update({
         mpesa_transaction_status: "confirmed",
-        mpesa_receipt_number: receipt ? String(receipt) : result.ConversationID,
+        mpesa_receipt_number: receipt ? String(receipt) : result.OriginatorConversationID,
       })
       .eq("id", tx.id);
 
