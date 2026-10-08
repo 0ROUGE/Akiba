@@ -104,8 +104,10 @@ export default function AccountPage() {
   async function handleChangePassword() {
     if (!profile?.email) return;
     setResetStatus("loading");
+    // The email link lands on /reset-password, where the new password is set.
+    // (It used to land on /login, which had no way to set one.)
     const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
     setResetStatus(error ? "error" : "sent");
   }

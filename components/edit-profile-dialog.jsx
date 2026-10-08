@@ -7,6 +7,10 @@ import { Camera, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { extractNationalNumber, isValidKenyanMobile, toE164 } from "@/lib/phone";
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export function EditProfileDialog({ profile }) {
   const supabase = createClient();
@@ -18,7 +22,8 @@ export function EditProfileDialog({ profile }) {
   const [photoPreview, setPhotoPreview] = useState(profile?.photo_url || null);
   const [form, setForm] = useState({
     full_name: profile?.full_name || "",
-    phone: profile?.phone || "",
+    // Older rows hold "07…" style numbers; this normalises them to the 9 national digits.
+    phone: extractNationalNumber(profile?.phone || ""),
     dob: profile?.dob || "",
   });
 
@@ -29,22 +34,48 @@ export function EditProfileDialog({ profile }) {
   function onPhotoChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setError("That photo is too large — please choose one under 5 MB.");
+      return;
+    }
+    setError("");
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setSubmitting(true);
     setError("");
+
+    if (form.full_name.trim().length < 2) {
+      setError("Enter your full name.");
+      return;
+    }
+    if (!isValidKenyanMobile(form.phone)) {
+      setError("Enter a valid Kenyan mobile number — 9 digits after +254, starting with 7 or 1.");
+      return;
+    }
+
+    setSubmitting(true);
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
+    if (!user) {
+      setError("Your session expired — please log in again.");
+      setSubmitting(false);
+      return;
+    }
+
     let photo_url;
     if (photoFile) {
-      const path = `${user.id}/${Date.now()}-${photoFile.name}`;
+      const ext = (photoFile.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "jpg";
+      const path = `${user.id}/${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(path, photoFile, { upsert: true });
@@ -59,8 +90,8 @@ export function EditProfileDialog({ profile }) {
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
-        full_name: form.full_name,
-        phone: form.phone,
+        full_name: form.full_name.trim(),
+        phone: toE164(form.phone),
         dob: form.dob || null,
         ...(photo_url ? { photo_url } : {}),
       })
@@ -105,7 +136,7 @@ export function EditProfileDialog({ profile }) {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                 <label
                   htmlFor="edit-photo"
                   className="mx-auto flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-border bg-muted"
@@ -125,14 +156,16 @@ export function EditProfileDialog({ profile }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-phone">Phone number</Label>
-                  <Input id="edit-phone" type="tel" required value={form.phone} onChange={update("phone")} />
+                  <PhoneInput id="edit-phone" required value={form.phone}
+                    onChange={(national) => setForm((f) => ({ ...f, phone: national }))} />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-dob">Date of birth</Label>
-                  <Input id="edit-dob" type="date" value={form.dob} onChange={update("dob")} />
+                  <Input id="edit-dob" type="date" max={new Date().toISOString().slice(0, 10)}
+                    value={form.dob} onChange={update("dob")} />
                 </div>
 
-                {error && <p className="text-sm text-danger">{error}</p>}
+                {error && <p role="alert" className="text-sm text-danger">{error}</p>}
 
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? "Saving…" : "Save changes"}

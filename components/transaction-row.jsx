@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, PiggyBank, ShoppingBag, RefreshCw } from "lucide-react";
 import { formatKES, formatDate } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const statusConfig = {
 // onCheckStatus is only passed for pending deposits — lets the person ask
 // Safaricom directly instead of waiting on a callback that might have been
 // missed (see /api/mpesa/stk-status).
+// Confirmed rows link to a shareable receipt.
 export function TransactionRow({ tx, onCheckStatus }) {
   const { icon: Icon, label, sign } = typeConfig[tx.type] ?? typeConfig.spend;
   const [checking, setChecking] = useState(false);
@@ -30,7 +32,7 @@ export function TransactionRow({ tx, onCheckStatus }) {
     setChecking(false);
   }
 
-  return (
+  const row = (
     <div className="flex items-center gap-3 py-3">
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
         <Icon size={17} />
@@ -60,4 +62,13 @@ export function TransactionRow({ tx, onCheckStatus }) {
       </div>
     </div>
   );
+
+  if (tx.mpesa_transaction_status === "confirmed") {
+    return (
+      <Link href={`/dashboard/receipt/${tx.id}`} className="block transition-colors hover:bg-muted" aria-label={`View receipt: ${tx.description || label}`}>
+        {row}
+      </Link>
+    );
+  }
+  return row;
 }
