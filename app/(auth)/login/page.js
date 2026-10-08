@@ -41,7 +41,7 @@ export default function LoginPage() {
     supportsPlatformPasskey().then(setPasskeySupported);
   }, []);
 
-  // Read ?exists=1 / ?reason=away straight from the URL (rather than
+  // Read ?exists=1 / ?reset=1 / ?reason=away straight from the URL (rather than
   // useSearchParams) so this page needs no Suspense boundary to build.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -54,6 +54,8 @@ export default function LoginPage() {
       } catch {
         /* nothing to prefill */
       }
+    } else if (params.get("reset") === "1") {
+      setNotice("Password updated. Log in with your new password.");
     } else if (params.get("reason") === "away") {
       setNotice("You were signed out because you were away for over a minute.");
     }
@@ -129,7 +131,10 @@ export default function LoginPage() {
               value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link href="/forgot-password" className="text-xs font-medium text-primary">Forgot password?</Link>
+            </div>
             <Input id="password" type="password" required autoComplete="current-password"
               value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
