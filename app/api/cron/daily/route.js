@@ -3,6 +3,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { reconcilePendingDeposits } from "@/lib/reconcile";
 import { releaseInstallment } from "@/lib/payouts";
 
+// Always run at request time, never during `next build`. Without this, Next
+// tries to evaluate the route while building; in Preview deployments the
+// server secrets (CRON_SECRET, SUPABASE_SERVICE_ROLE_KEY) aren't set, so
+// createAdminClient() threw "supabaseKey is required" and failed the build.
+export const dynamic = "force-dynamic";
+
 // Runs once a day (Vercel Hobby plan caps cron at once-per-day — see
 // vercel.json). Does two unrelated jobs back to back since Hobby also caps
 // us at 2 crons/project and bundling keeps this comfortably under that:
