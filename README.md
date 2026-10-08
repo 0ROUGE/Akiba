@@ -106,6 +106,16 @@ one-way at the ledger level (same convention `allocate_to_goal` already
 used) — there's no "un-allocate back to spendable balance without actually
 receiving the M-Pesa payout" path yet.
 
+**Withdrawals failing with error 2040** ("Credit Party customer type can't
+be supported by the service") after the OriginatorConversationID fix: B2C was
+using the STK Push shortcode (174379) as PartyA. B2C needs its own shortcode
+(`DARAJA_B2C_SHORTCODE`, the 600XXX one on the Daraja portal's Test
+Credentials page). Also: the sandbox never pays out to a real phone. It only
+accepts Safaricom's test MSISDN, so `DARAJA_SANDBOX_MSISDN` substitutes as the
+recipient in sandbox only (hard-disabled when `DARAJA_ENV=production`). Real
+money reaching a real phone requires a production paybill/till plus Daraja
+Go Live; no code change can substitute for that.
+
 ## PWA capabilities
 Built out for a clean [PWABuilder](https://www.pwabuilder.com/) report:
 - **Service Worker** (`public/sw.js`), registered unconditionally on every
