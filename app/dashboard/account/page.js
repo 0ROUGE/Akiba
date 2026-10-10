@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, LogOut, ShieldCheck, KeyRound, Bell, Send } from "lucide-react";
+import { LogOut, ShieldCheck, KeyRound, Bell, Send, Languages, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { subscribeToPush } from "@/lib/push";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,32 +10,46 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { EditProfileDialog } from "@/components/edit-profile-dialog";
 import { PasskeyManager } from "@/components/passkey-manager";
+import { SettingsRow } from "@/components/settings-row";
+import { AutoSaveManager } from "@/components/auto-save-manager";
+import { DepositReminderManager } from "@/components/deposit-reminder-manager";
+import { WithdrawalLimitManager } from "@/components/withdrawal-limit-manager";
+import { useT } from "@/components/language-provider";
+import { LANGS, LANG_LABELS } from "@/lib/i18n";
 
-const PUSH_ERROR_MESSAGES = {
-  unsupported: "Not supported in this browser",
-  "permission-denied": "Blocked — check your browser's site settings",
-  "missing-vapid-key": "Not configured yet",
+const PUSH_ERROR_KEYS = {
+  unsupported: "account.pushUnsupported",
+  "permission-denied": "account.pushBlocked",
+  "missing-vapid-key": "account.pushNotConfigured",
 };
+
+// Deliberately NOT select("*"): the profile row also holds the (encrypted)
+// two-factor secret, which the browser has no reason to download.
+const PROFILE_COLUMNS =
+  "id, full_name, phone, photo_url, dob, two_factor_enabled, phone_changed_at, daily_withdrawal_limit, daily_limit_change_pending, daily_limit_next, daily_limit_next_at";
 
 export default function AccountPage() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t, lang, setLang } = useT();
   const [profile, setProfile] = useState(null);
   const [shareNotice, setShareNotice] = useState(null);
-  const [pushStatus, setPushStatus] = useState(null); // null | "checking" | "enabled" | "off" | "loading" | error key
+  const [pushStatus, setPushStatus] = useState(null); // null | "enabled" | "off" | "loading" | error key
   const [testStatus, setTestStatus] = useState(null);
   const [resetStatus, setResetStatus] = useState(null);
 
+  const loadProfile = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", user.id).single();
+    setProfile({ ...data, email: user.email });
+  }, [supabase]);
+
   useEffect(() => {
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      setProfile({ ...data, email: user.email });
-    })();
+    loadProfile();
 
     // Reflect the real subscription state on load, not just "Turn on" every time.
     (async () => {
@@ -47,7 +61,7 @@ export default function AccountPage() {
       const existing = await registration?.pushManager.getSubscription();
       setPushStatus(existing ? "enabled" : "off");
     })();
-  }, [supabase]);
+  }, [loadProfile]);
 
   // Feedback after the OS "Share to AKIBA" flow redirects back here.
   useEffect(() => {
@@ -90,7 +104,7 @@ export default function AccountPage() {
       await subscribeToPush();
       setPushStatus("enabled");
     } catch (err) {
-      setPushStatus(PUSH_ERROR_MESSAGES[err.message] ? err.message : "error");
+      setPushStatus(PUSH_ERROR_KEYS[err.message] ? err.message : "error");
     }
   }
 
@@ -105,7 +119,6 @@ export default function AccountPage() {
     if (!profile?.email) return;
     setResetStatus("loading");
     // The email link lands on /reset-password, where the new password is set.
-    // (It used to land on /login, which had no way to set one.)
     const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
@@ -118,13 +131,18 @@ export default function AccountPage() {
     router.refresh();
   }
 
+  function cycleLanguage() {
+    const next = LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length];
+    setLang(next);
+  }
+
   const pushValue = (() => {
-    if (pushStatus === "enabled") return "Enabled";
-    if (pushStatus === "loading") return "Enabling…";
-    if (pushStatus === "checking" || pushStatus === null) return "";
-    if (PUSH_ERROR_MESSAGES[pushStatus]) return PUSH_ERROR_MESSAGES[pushStatus];
-    if (pushStatus === "error") return "Couldn't enable";
-    return "Turn on";
+    if (pushStatus === "enabled") return t("account.enabled");
+    if (pushStatus === "loading") return t("account.enabling");
+    if (pushStatus === null) return "";
+    if (PUSH_ERROR_KEYS[pushStatus]) return t(PUSH_ERROR_KEYS[pushStatus]);
+    if (pushStatus === "error") return t("account.pushFailed");
+    return t("account.turnOn");
   })();
 
   return (
@@ -140,7 +158,7 @@ export default function AccountPage() {
           )}
         </div>
         <div className="flex-1">
-          <h1 className="font-display text-xl font-semibold">{profile?.full_name || "Your account"}</h1>
+          <h1 className="font-display text-xl font-semibold">{profile?.full_name || t("account.title")}</h1>
           <p className="text-sm text-muted-foreground">{profile?.email}</p>
         </div>
         {profile && <EditProfileDialog profile={profile} />}
@@ -148,52 +166,78 @@ export default function AccountPage() {
 
       <Card>
         <CardContent className="divide-y divide-border p-0">
-          <Row icon={ShieldCheck} label="Two-factor authentication" value={profile?.two_factor_enabled ? "Enabled" : "Not set up"} />
+          <SettingsRow
+            icon={ShieldCheck}
+            label={t("account.twofa")}
+            value={profile?.two_factor_enabled ? t("account.enabled") : t("account.notSetUp")}
+          />
           <PasskeyManager />
-          <Row
+          <SettingsRow
             icon={KeyRound}
-            label="Change password"
-            value={resetStatus === "sent" ? "Email sent" : resetStatus === "loading" ? "Sending…" : resetStatus === "error" ? "Couldn't send" : undefined}
+            label={t("account.changePassword")}
+            value={
+              resetStatus === "sent"
+                ? t("account.emailSent")
+                : resetStatus === "loading"
+                  ? t("common.sending")
+                  : resetStatus === "error"
+                    ? t("account.couldntSend")
+                    : undefined
+            }
             onClick={handleChangePassword}
           />
-          <Row
+          <SettingsRow
             icon={Bell}
-            label="Push notifications"
+            label={t("account.push")}
             value={pushValue}
             onClick={pushStatus === "enabled" ? undefined : handleEnablePush}
           />
           {pushStatus === "enabled" && (
-            <Row
+            <SettingsRow
               icon={Send}
-              label="Send test notification"
-              value={testStatus === "sent" ? "Sent!" : testStatus === "loading" ? "Sending…" : testStatus && testStatus !== "sent" ? testStatus : undefined}
+              label={t("account.testPush")}
+              value={
+                testStatus === "sent"
+                  ? t("account.sent")
+                  : testStatus === "loading"
+                    ? t("common.sending")
+                    : testStatus && testStatus !== "sent"
+                      ? testStatus
+                      : undefined
+              }
               onClick={handleSendTest}
             />
           )}
         </CardContent>
       </Card>
 
+      <div>
+        <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {t("account.moneyControls")}
+        </h2>
+        <Card>
+          <CardContent className="divide-y divide-border p-0">
+            <AutoSaveManager />
+            <DepositReminderManager />
+            <WithdrawalLimitManager profile={profile} onSaved={loadProfile} />
+            <SettingsRow icon={FileText} label={t("account.statements")} href="/dashboard/statement" />
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
-        <CardContent className="flex items-center justify-between py-4">
-          <span className="text-sm font-medium">Appearance</span>
-          <ThemeToggle />
+        <CardContent className="divide-y divide-border p-0">
+          <SettingsRow icon={Languages} label={t("account.language")} value={LANG_LABELS[lang]} onClick={cycleLanguage} />
+          <div className="flex items-center justify-between px-5 py-4">
+            <span className="text-sm font-medium">{t("account.appearance")}</span>
+            <ThemeToggle />
+          </div>
         </CardContent>
       </Card>
 
       <Button variant="outline" className="w-full gap-2 text-danger" onClick={handleSignOut}>
-        <LogOut size={16} /> Sign out
+        <LogOut size={16} /> {t("account.signOut")}
       </Button>
     </div>
-  );
-}
-
-function Row({ icon: Icon, label, value, onClick }) {
-  return (
-    <button onClick={onClick} disabled={!onClick} className="flex w-full items-center gap-3 px-5 py-4 text-left disabled:cursor-default">
-      <Icon size={18} className="text-muted-foreground" />
-      <span className="flex-1 text-sm font-medium">{label}</span>
-      {value && <span className="text-sm text-muted-foreground">{value}</span>}
-      {onClick && <ChevronRight size={16} className="text-muted-foreground" />}
-    </button>
   );
 }
