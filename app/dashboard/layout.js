@@ -21,7 +21,7 @@ export default async function DashboardLayout({ children }) {
       <Sidebar />
       <IdleLogoutGuard />
       <AwayLogoutGuard signedInAt={signedInAt} />
-      <main className="pb-24 md:ml-60 md:pb-10">
+      <main className="pb-24 md:ml-60 md:pb-10 print:ml-0 print:pb-0">
         <div className="mx-auto max-w-3xl px-5 pt-8 sm:px-8">{children}</div>
       </main>
       <BottomNav />
