@@ -10,9 +10,11 @@ import { TransactionRow } from "@/components/transaction-row";
 import { LogSpendDialog } from "@/components/log-spend-dialog";
 import { AllowanceDialog } from "@/components/allowance-dialog";
 import { formatKES, formatDate } from "@/lib/utils";
-import { allowanceState, categoryLabel, summarizeWeek, weekWindow, WEEK_MS } from "@/lib/spending";
+import { allowanceState, summarizeWeek, weekWindow, WEEK_MS } from "@/lib/spending";
+import { useT } from "@/components/language-provider";
 
 const filters = ["All", "Allocations", "Spending"];
+const FILTER_KEYS = { All: "spending.filter.all", Allocations: "spending.filter.allocations", Spending: "spending.filter.spending" };
 const BAR_COLOR = { ok: "bg-primary", warn: "bg-warning", over: "bg-danger" };
 
 function Skeleton({ className = "" }) {
@@ -20,6 +22,7 @@ function Skeleton({ className = "" }) {
 }
 
 export default function SpendingPage() {
+  const { t } = useT();
   const supabase = createClient();
   const [transactions, setTransactions] = useState([]);
   const [entries, setEntries] = useState([]);
@@ -52,7 +55,7 @@ export default function SpendingPage() {
     ]);
 
     if (txRes.error || entryRes.error || allowanceRes.error) {
-      setError("Couldn't load your spending. Check your connection and try again.");
+      setError(t("spending.loadError"));
     } else {
       setError("");
     }
@@ -60,17 +63,17 @@ export default function SpendingPage() {
     setEntries(entryRes.data ?? []);
     setAllowance(allowanceRes.data ?? null);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, t]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   async function handleDelete(id) {
-    if (!window.confirm("Delete this spending entry?")) return;
+    if (!window.confirm(t("spending.deleteConfirm"))) return;
     const { error: deleteError } = await supabase.from("spending_entries").delete().eq("id", id);
     if (deleteError) {
-      setError("Couldn't delete that entry. Please try again.");
+      setError(t("spending.deleteError"));
       return;
     }
     load();
@@ -85,28 +88,28 @@ export default function SpendingPage() {
   const week = useMemo(() => summarizeWeek(entries, window7), [entries, window7]);
   const state = allowance ? allowanceState(week.total, allowance.weekly_amount) : null;
 
-  const filtered = transactions.filter((t) => {
+  const filtered = transactions.filter((row) => {
     if (filter === "All") return true;
-    if (filter === "Allocations") return t.type === "allocation";
-    return t.type === "spend";
+    if (filter === "Allocations") return row.type === "allocation";
+    return row.type === "spend";
   });
 
   return (
     <div className="space-y-6 pb-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold">Spending</h1>
+          <h1 className="font-display text-2xl font-semibold">{t("spending.title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track what you spend. Logged spending is self-reported — it doesn&rsquo;t change your AKIBA balance.
+            {t("spending.subtitle")}
           </p>
         </div>
-        <LogSpendDialog onSaved={load} />
+        <LogSpendDialog onSaved={load} label={t("spending.log")} />
       </div>
 
       {error && (
         <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm">
           <span>{error}</span>
-          <Button size="sm" variant="outline" onClick={load}>Retry</Button>
+          <Button size="sm" variant="outline" onClick={load}>{t("common.retry")}</Button>
         </div>
       )}
 
@@ -123,7 +126,7 @@ export default function SpendingPage() {
               {allowance ? (
                 <>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Weekly allowance</span>
+                    <span className="text-muted-foreground">{t("spending.allowance")}</span>
                     <span className="font-medium tabular-nums">
                       {formatKES(week.total)} / {formatKES(allowance.weekly_amount)}
                     </span>
@@ -139,23 +142,23 @@ export default function SpendingPage() {
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>
                       {state.level === "over"
-                        ? "Allowance used up"
-                        : `${formatKES(Math.max(0, allowance.weekly_amount - week.total))} left`}
+                        ? t("spending.usedUp")
+                        : t("spending.left", { amount: formatKES(Math.max(0, allowance.weekly_amount - week.total)) })}
                     </span>
-                    <span>Resets {formatDate(new Date(window7.end).toISOString())}</span>
+                    <span>{t("spending.resets", { date: formatDate(new Date(window7.end).toISOString()) })}</span>
                   </div>
                   <AllowanceDialog allowance={allowance} onSaved={load}>
-                    <button className="text-sm font-medium text-primary">Change allowance</button>
+                    <button className="text-sm font-medium text-primary">{t("spending.changeAllowance")}</button>
                   </AllowanceDialog>
                 </>
               ) : (
                 <div className="space-y-2 text-center">
-                  <p className="text-sm font-medium">No weekly allowance yet</p>
+                  <p className="text-sm font-medium">{t("spending.noAllowance")}</p>
                   <p className="text-sm text-muted-foreground">
-                    Set one and we&rsquo;ll warn you at 80% and when it&rsquo;s used up.
+                    {t("spending.noAllowanceHint")}
                   </p>
                   <AllowanceDialog allowance={null} onSaved={load}>
-                    <Button size="sm">Set weekly allowance</Button>
+                    <Button size="sm">{t("spending.setAllowance")}</Button>
                   </AllowanceDialog>
                 </div>
               )}
@@ -165,7 +168,7 @@ export default function SpendingPage() {
           <Card>
             <CardContent className="space-y-4 pt-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-medium">{allowance ? "This week by category" : "Last 7 days by category"}</h2>
+                <h2 className="text-sm font-medium">{allowance ? t("spending.thisWeek") : t("spending.last7")}</h2>
                 <span className="text-sm font-medium tabular-nums">{formatKES(week.total)}</span>
               </div>
               {week.byCategory.length ? (
@@ -173,7 +176,7 @@ export default function SpendingPage() {
                   {week.byCategory.map((c) => (
                     <li key={c.id} className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span>{c.label}</span>
+                        <span>{t(`cat.${c.id}`)}</span>
                         <span className="tabular-nums text-muted-foreground">
                           {formatKES(c.amount)} · {c.pct}%
                         </span>
@@ -191,7 +194,7 @@ export default function SpendingPage() {
                 </ul>
               ) : (
                 <p className="py-4 text-center text-sm text-muted-foreground">
-                  Nothing logged yet. Tap “Log spending” to add your first entry.
+                  {t("spending.nothingLogged")}
                 </p>
               )}
             </CardContent>
@@ -200,14 +203,14 @@ export default function SpendingPage() {
           {entries.length > 0 && (
             <Card>
               <CardContent className="p-0 px-5">
-                <h2 className="pt-5 text-sm font-medium">Logged spending</h2>
+                <h2 className="pt-5 text-sm font-medium">{t("spending.logged")}</h2>
                 <ul className="divide-y divide-border">
                   {entries.slice(0, 30).map((e) => (
                     <li key={e.id} className="flex items-center gap-3 py-3">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{e.note || categoryLabel(e.category)}</p>
+                        <p className="truncate text-sm font-medium">{e.note || t(`cat.${e.category}`)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {categoryLabel(e.category)} · {formatDate(e.spent_at)}
+                          {t(`cat.${e.category}`)} · {formatDate(e.spent_at)}
                         </p>
                       </div>
                       <p className="text-sm font-medium tabular-nums">− {formatKES(e.amount)}</p>
@@ -236,7 +239,7 @@ export default function SpendingPage() {
                     : "border-border text-muted-foreground hover:bg-muted"
                 }`}
               >
-                {f}
+                {t(FILTER_KEYS[f])}
               </button>
             ))}
           </div>
@@ -246,7 +249,7 @@ export default function SpendingPage() {
               {filtered.length ? (
                 filtered.map((tx) => <TransactionRow key={tx.id} tx={tx} />)
               ) : (
-                <p className="py-8 text-center text-sm text-muted-foreground">Nothing here yet.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">{t("spending.nothingHere")}</p>
               )}
             </CardContent>
           </Card>

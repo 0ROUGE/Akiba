@@ -8,6 +8,8 @@ import { Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { useT } from "@/components/language-provider";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { supportsPlatformPasskey, describePasskeyError } from "@/lib/webauthn-support";
 
 const PREFILL_KEY = "akiba_prefill_email";
@@ -27,12 +29,13 @@ function friendlyAuthError(error) {
 }
 
 export default function LoginPage() {
+  const { t } = useT();
   const router = useRouter();
   const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(""); // holds a translation KEY, rendered with t()
   const [loading, setLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
@@ -46,7 +49,7 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("exists") === "1") {
-      setNotice("You already have an AKIBA account with that email — log in below.");
+      setNotice("login.notice.exists");
       try {
         const saved = window.sessionStorage.getItem(PREFILL_KEY);
         if (saved) setEmail(saved);
@@ -55,9 +58,9 @@ export default function LoginPage() {
         /* nothing to prefill */
       }
     } else if (params.get("reset") === "1") {
-      setNotice("Password updated. Log in with your new password.");
+      setNotice("login.notice.reset");
     } else if (params.get("reason") === "away") {
-      setNotice("You were signed out because you were away for over a minute.");
+      setNotice("login.notice.away");
     }
   }, []);
 
@@ -114,26 +117,29 @@ export default function LoginPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-sm"
       >
-        <Link href="/" className="font-display text-xl font-semibold">AKIBA</Link>
-        <h1 className="mt-8 font-display text-2xl font-semibold">Welcome back</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Log in to see your balance and goals.</p>
+        <div className="flex items-center justify-between">
+          <Link href="/" className="font-display text-xl font-semibold">AKIBA</Link>
+          <LanguageSwitcher />
+        </div>
+        <h1 className="mt-8 font-display text-2xl font-semibold">{t("login.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t("login.subtitle")}</p>
 
         {notice && (
           <div role="status" className="mt-6 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-            {notice}
+            {t(notice)}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("login.email")}</Label>
             <Input id="email" type="email" required autoComplete="email"
               value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link href="/forgot-password" className="text-xs font-medium text-primary">Forgot password?</Link>
+              <Label htmlFor="password">{t("login.password")}</Label>
+              <Link href="/forgot-password" className="text-xs font-medium text-primary">{t("login.forgot")}</Link>
             </div>
             <Input id="password" type="password" required autoComplete="current-password"
               value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -158,22 +164,22 @@ export default function LoginPage() {
               </Button>
             )}
             <Button type="submit" className="flex-1" disabled={loading}>
-              {loading ? "Logging in…" : "Log in"}
+              {loading ? t("login.submitting") : t("login.submit")}
             </Button>
           </div>
         </form>
 
         <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-          <div className="h-px flex-1 bg-border" /> or <div className="h-px flex-1 bg-border" />
+          <div className="h-px flex-1 bg-border" /> {t("common.or")} <div className="h-px flex-1 bg-border" />
         </div>
 
         <Button variant="outline" className="w-full" onClick={handleGoogle}>
-          Continue with Google
+          {t("common.google")}
         </Button>
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          New to AKIBA?{" "}
-          <Link href="/register" className="font-medium text-primary">Create an account</Link>
+          {t("login.new")}{" "}
+          <Link href="/register" className="font-medium text-primary">{t("login.create")}</Link>
         </p>
       </motion.div>
     </div>

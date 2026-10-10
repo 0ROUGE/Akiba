@@ -1,5 +1,6 @@
 import { Space_Grotesk, IBM_Plex_Sans } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { LanguageProvider } from "@/components/language-provider";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import "./globals.css";
 
@@ -47,8 +48,10 @@ export default function RootLayout({ children }) {
     <html lang="en" suppressHydrationWarning>
       <body className={`${display.variable} ${body.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <ServiceWorkerRegister />
-          {children}
+          <LanguageProvider>
+            <ServiceWorkerRegister />
+            {children}
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

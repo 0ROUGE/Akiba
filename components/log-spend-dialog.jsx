@@ -11,7 +11,7 @@ import { CATEGORIES, parseAmount } from "@/lib/spending";
 const selectClass =
   "flex h-12 w-full rounded-xl border border-border bg-background px-4 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
-export function LogSpendDialog({ onSaved }) {
+export function LogSpendDialog({ onSaved, label = "Log spending" }) {
   const supabase = createClient();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
@@ -63,7 +63,7 @@ export function LogSpendDialog({ onSaved }) {
   return (
     <>
       <Button onClick={() => setOpen(true)} size="sm" className="gap-1.5">
-        <Plus size={15} /> Log spending
+        <Plus size={15} /> {label}
       </Button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Log spending">
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
