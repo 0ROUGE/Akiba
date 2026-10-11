@@ -4,14 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { reconcilePendingDeposits } from "@/lib/reconcile";
 import { releaseInstallment } from "@/lib/payouts";
 import { notifyUser } from "@/lib/notify";
+import { dispatchSms } from "@/lib/sms-dispatch";
 
 // Always run at request time, never during `next build`. Without this, Next
 // tries to evaluate the route while building; in Preview deployments the
 // server secrets (CRON_SECRET, SUPABASE_SERVICE_ROLE_KEY) aren't set, so
 // createAdminClient() threw "supabaseKey is required" and failed the build.
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-// Runs once a day (Vercel Hobby plan caps cron at once-per-day — see
+// Runs once a day (Vercel Hobby plan caps cron at once-per-day - see
 // vercel.json). Bundles several unrelated jobs, each isolated so one failing
 // never stops the others:
 //
@@ -20,6 +22,7 @@ export const dynamic = "force-dynamic";
 //    directly what really happened to them (fallback for missed callbacks)
 // 3. Runs due auto-save rules (moves AKIBA balance into goals)
 // 4. Sends today's deposit reminders
+// 5. Sweeps the SMS queue (retries, feature broadcasts, anything not yet sent)
 //
 // Auth: Vercel's cron sends `Authorization: Bearer $CRON_SECRET`. The route
 // FAILS CLOSED: with no CRON_SECRET configured it refuses to run at all
@@ -124,6 +127,14 @@ export async function GET(request) {
   } catch (err) {
     console.error("cron: reminders failed", err?.message);
     result.reminders = { error: "failed" };
+  }
+
+  // --- Job 5: sweep the SMS queue (last, so it also catches alerts raised by jobs 1-4) ---
+  try {
+    result.sms = await dispatchSms(admin, { limit: 50, budgetMs: 25000 });
+  } catch (err) {
+    console.error("cron: sms sweep failed", err?.message);
+    result.sms = { error: "failed" };
   }
 
   return NextResponse.json(result);
