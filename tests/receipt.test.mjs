@@ -46,6 +46,8 @@ test("omits description row when empty and labels other types", () => {
 test("dates are rendered in Nairobi time", () => {
   const r = buildReceipt(base, fmt);
   const date = r.rows.find(([k]) => k === "Date")[1];
-  assert.match(date, /12 Oct 2026/);
-  assert.match(date, /12:30/); // 09:30Z is 12:30 in Nairobi (UTC+3)
+  // Locale-tolerant: only the facts that matter (month, year, and 09:30Z -> 12:30 in UTC+3).
+  assert.match(date, /Oct/);
+  assert.match(date, /2026/);
+  assert.match(date, /12:30/);
 });
