@@ -3,15 +3,18 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stkPush } from "@/lib/mpesa";
 
+// M-Pesa's own single-transaction ceiling.
+const MAX_DEPOSIT = 250_000;
+
 // Starts a real M-Pesa deposit: inserts a 'pending' ledger row, then asks
 // Daraja to push an STK prompt to the user's phone. The row only ever
 // becomes 'confirmed' when /api/mpesa/stk-callback hears back from Safaricom
-// — this route never marks money as received on its own.
+// — this route never marks money as received on its own. It returns the
+// ledger row's id so the app can follow that exact deposit (spinner ->
+// success screen), even across a page refresh.
 export async function POST(request) {
   // Fail loudly and cleanly on missing config, rather than letting
-  // createAdminClient() throw unhandled further down (which surfaces to the
-  // browser as a generic non-JSON 500 — exactly the confusing "couldn't
-  // reach M-Pesa" dead end this is here to prevent).
+  // createAdminClient() throw unhandled further down.
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json(
       { error: "Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is not set." },
@@ -26,9 +29,13 @@ export async function POST(request) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-    const { amount } = await request.json();
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+    const body = await request.json().catch(() => ({}));
+    const amount = body?.amount;
+    if (!Number.isInteger(amount) || amount < 1 || amount > MAX_DEPOSIT) {
+      return NextResponse.json(
+        { error: `Enter a whole amount from KES 1 to KES ${MAX_DEPOSIT.toLocaleString("en-KE")}.` },
+        { status: 400 }
+      );
     }
 
     const { data: profile } = await supabase.from("profiles").select("phone").eq("id", user.id).single();
@@ -67,7 +74,11 @@ export async function POST(request) {
         .update({ mpesa_receipt_number: result.CheckoutRequestID })
         .eq("id", tx.id);
 
-      return NextResponse.json({ status: "pending", checkoutRequestId: result.CheckoutRequestID });
+      return NextResponse.json({
+        status: "pending",
+        transactionId: tx.id,
+        checkoutRequestId: result.CheckoutRequestID,
+      });
     } catch (err) {
       await admin
         .from("ledger_transactions")
@@ -76,9 +87,7 @@ export async function POST(request) {
       return NextResponse.json({ error: err.message }, { status: 502 });
     }
   } catch (err) {
-    // Last-resort net: whatever broke, the client still gets JSON with a
-    // real message instead of a bare 500 that the UI can only show as
-    // "couldn't reach M-Pesa."
+    // Last-resort net: whatever broke, the client still gets JSON with a real message.
     return NextResponse.json({ error: err.message || "Unexpected server error" }, { status: 500 });
   }
 }

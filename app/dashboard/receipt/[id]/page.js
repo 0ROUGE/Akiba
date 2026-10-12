@@ -5,24 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReceiptActions } from "@/components/receipt-actions";
 import { formatKES } from "@/lib/utils";
-import { cleanDescription } from "@/lib/receipt-format";
+import { buildReceipt } from "@/lib/receipt";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const TYPE_LABELS = {
-  deposit: "Deposit",
-  withdrawal: "Withdrawal",
-  allocation: "Allocation to goal",
-  spend: "Spend",
-};
-
-function formatWhen(iso) {
-  return new Intl.DateTimeFormat("en-KE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Africa/Nairobi",
-  }).format(new Date(iso));
-}
 
 export const metadata = { title: "Receipt · AKIBA" };
 
@@ -40,22 +25,7 @@ export default async function ReceiptPage({ params }) {
   // Receipts only exist for transactions that were actually confirmed.
   if (!tx || tx.mpesa_transaction_status !== "confirmed") notFound();
 
-  const label = TYPE_LABELS[tx.type] ?? "Transaction";
-  const description = cleanDescription(tx.description);
-  const rows = [
-    ["Type", label],
-    ["Amount", formatKES(tx.amount)],
-    ["Date", formatWhen(tx.created_at)],
-    ...(tx.mpesa_receipt_number ? [["M-Pesa receipt no.", tx.mpesa_receipt_number]] : []),
-    ...(description ? [["Description", description]] : []),
-    ["AKIBA reference", tx.id.slice(0, 8).toUpperCase()],
-  ];
-
-  const shareText = [
-    "AKIBA receipt",
-    ...rows.map(([k, v]) => `${k}: ${v}`),
-    "Status: Confirmed",
-  ].join("\n");
+  const receipt = buildReceipt(tx, formatKES);
 
   return (
     <div className="space-y-6 pb-6">
@@ -67,12 +37,12 @@ export default async function ReceiptPage({ params }) {
         <CardContent className="space-y-6 pt-6">
           <div className="flex flex-col items-center gap-2 text-center">
             <CheckCircle2 size={36} className="text-success" />
-            <p className="text-sm text-muted-foreground">{label} confirmed</p>
-            <p className="font-display text-3xl font-semibold tabular-nums">{formatKES(tx.amount)}</p>
+            <p className="text-sm text-muted-foreground">{receipt.label} confirmed</p>
+            <p className="font-display text-3xl font-semibold tabular-nums">{receipt.amount}</p>
           </div>
 
           <dl className="divide-y divide-border text-sm">
-            {rows.map(([k, v]) => (
+            {receipt.rows.map(([k, v]) => (
               <div key={k} className="flex items-start justify-between gap-4 py-3">
                 <dt className="text-muted-foreground">{k}</dt>
                 <dd className="break-all text-right font-medium">{v}</dd>
@@ -86,7 +56,7 @@ export default async function ReceiptPage({ params }) {
         </CardContent>
       </Card>
 
-      <ReceiptActions text={shareText} pdfHref={`/api/receipts/${tx.id}/pdf`} />
+      <ReceiptActions text={receipt.text} receipt={receipt} />
     </div>
   );
 }

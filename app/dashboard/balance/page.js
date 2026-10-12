@@ -10,13 +10,13 @@ import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionRow } from "@/components/transaction-row";
 import { AllowancePlans } from "@/components/allowance-plans";
+import { DepositFlow } from "@/components/deposit-flow";
 import { formatKES } from "@/lib/utils";
-import { enqueueRequest, registerBackgroundSync } from "@/lib/offline-queue";
 
 // STK Push / B2C initiation happen server-side in /api/mpesa/stk-push and
-// /api/mpesa/b2c. This page calls them and then relies on realtime to
-// reflect the confirmed/failed state once Safaricom's callback lands — it
-// never marks a transaction successful on its own.
+// /api/mpesa/b2c. Deposits run through <DepositFlow> (waiting spinner, auto
+// success screen, survives refresh). Neither path ever marks a transaction
+// successful on its own - only Safaricom's callback (or a status query) does.
 export default function BalancePage() {
   const supabase = createClient();
   const searchParams = useSearchParams();
@@ -27,10 +27,8 @@ export default function BalancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
-  // Fetches data only — never touches the realtime channel, so calling this
-  // on every change event can't multiply subscriptions (that was the bug:
-  // the old version re-subscribed on every update, leaking a channel each
-  // time and making the page progressively slower the longer it stayed open).
+  // Fetches data only - never touches the realtime channel, so calling this
+  // on every change event can't multiply subscriptions.
   const loadData = useCallback(
     async (userId) => {
       const [{ data: balanceRow }, { data: txs }] = await Promise.all([
@@ -48,6 +46,13 @@ export default function BalancePage() {
     },
     [supabase]
   );
+
+  const reload = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await loadData(user.id);
+  }, [supabase, loadData]);
 
   useEffect(() => {
     let channel;
@@ -75,7 +80,7 @@ export default function BalancePage() {
   }, [supabase, loadData]);
 
   // Opens the right modal straight away when linked to with ?action=deposit
-  // or ?action=withdraw — used by the dashboard quick actions and by the
+  // or ?action=withdraw - used by the dashboard quick actions and by the
   // web+akiba: protocol handler.
   useEffect(() => {
     const action = searchParams.get("action");
@@ -91,37 +96,28 @@ export default function BalancePage() {
     await res.json().catch(() => ({}));
     // Realtime will normally pick up the row change already, but refresh
     // explicitly too in case the websocket missed it.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) await loadData(user.id);
+    await reload();
   }
 
-  async function handleSubmit(e) {
+  async function handleWithdraw(e) {
     e.preventDefault();
     setSubmitting(true);
     setFeedback(null);
-    const endpoint = modal === "deposit" ? "/api/mpesa/stk-push" : "/api/mpesa/b2c";
-    const body = { amount: Number(amount) };
 
-    let res, data;
+    let res;
+    let data;
     try {
-      res = await fetch(endpoint, {
+      res = await fetch("/api/mpesa/b2c", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ amount: Number(amount) }),
       });
       data = await res.json().catch(() => ({}));
     } catch {
-      // No network at all (not a server error) — queue it for Background
-      // Sync to retry automatically the moment connectivity returns.
-      enqueueRequest({ endpoint, body });
-      await registerBackgroundSync();
+      // Withdrawals are never queued for later: money should only leave on a
+      // request the user can see go through right now.
       setSubmitting(false);
-      setFeedback({
-        type: "error",
-        text: "You're offline — this will be sent automatically once you're back online.",
-      });
+      setFeedback({ type: "error", text: "You're offline. Connect to the internet to withdraw." });
       return;
     }
 
@@ -130,13 +126,7 @@ export default function BalancePage() {
       setFeedback({ type: "error", text: data.error || "Couldn't reach M-Pesa right now. Try again shortly." });
       return;
     }
-    setFeedback({
-      type: "success",
-      text:
-        modal === "deposit"
-          ? "Check your phone to approve the M-Pesa prompt."
-          : "Withdrawal requested — it'll land on your phone once confirmed.",
-    });
+    setFeedback({ type: "success", text: "Withdrawal requested — it'll land on your phone once confirmed." });
     setAmount("");
   }
 
@@ -179,8 +169,15 @@ export default function BalancePage() {
         </Card>
       </section>
 
+      <DepositFlow
+        open={modal === "deposit"}
+        onClose={() => setModal(null)}
+        onResume={() => setModal("deposit")}
+        onSettled={reload}
+      />
+
       <AnimatePresence>
-        {modal && (
+        {modal === "withdraw" && (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
             initial={{ opacity: 0 }}
@@ -197,13 +194,13 @@ export default function BalancePage() {
               className="w-full max-w-sm rounded-t-2xl bg-card p-6 sm:rounded-2xl"
             >
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-display text-lg font-medium capitalize">{modal}</h3>
+                <h3 className="font-display text-lg font-medium">Withdraw</h3>
                 <button onClick={() => setModal(null)} aria-label="Close">
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleWithdraw} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="amount">Amount (KES)</Label>
                   <Input
@@ -223,11 +220,7 @@ export default function BalancePage() {
                   </p>
                 )}
                 <Button type="submit" className="w-full" disabled={submitting}>
-                  {submitting
-                    ? "Sending…"
-                    : modal === "deposit"
-                    ? "Send M-Pesa prompt"
-                    : "Request withdrawal"}
+                  {submitting ? "Sending…" : "Request withdrawal"}
                 </Button>
               </form>
             </motion.div>
