@@ -5,6 +5,7 @@ import { reconcilePendingDeposits } from "@/lib/reconcile";
 import { releaseInstallment } from "@/lib/payouts";
 import { notifyUser } from "@/lib/notify";
 import { dispatchSms } from "@/lib/sms-dispatch";
+import { settleStaleSimulated } from "@/lib/sandbox-payouts";
 
 // Always run at request time, never during `next build`. Without this, Next
 // tries to evaluate the route while building; in Preview deployments the
@@ -22,12 +23,12 @@ export const maxDuration = 60;
 //    directly what really happened to them (fallback for missed callbacks)
 // 3. Runs due auto-save rules (moves AKIBA balance into goals)
 // 4. Sends today's deposit reminders
-// 5. Sweeps the SMS queue (retries, feature broadcasts, anything not yet sent)
+// 5. Settles sandbox (simulated) withdrawals nobody is waiting on any more
+// 6. Sweeps the SMS queue (retries, feature broadcasts, anything not yet sent)
 //
 // Auth: Vercel's cron sends `Authorization: Bearer $CRON_SECRET`. The route
-// FAILS CLOSED: with no CRON_SECRET configured it refuses to run at all
-// (previously it silently skipped the check, leaving a route that releases
-// real payouts open to anyone). To trigger it by hand:
+// FAILS CLOSED: with no CRON_SECRET configured it refuses to run at all.
+// To trigger it by hand:
 //   curl -H "Authorization: Bearer $CRON_SECRET" https://<site>/api/cron/daily
 function isAuthorized(request, secret) {
   const header = request.headers.get("authorization") || "";
@@ -129,7 +130,15 @@ export async function GET(request) {
     result.reminders = { error: "failed" };
   }
 
-  // --- Job 5: sweep the SMS queue (last, so it also catches alerts raised by jobs 1-4) ---
+  // --- Job 5: settle abandoned sandbox withdrawals ---
+  try {
+    result.sandboxSettled = await settleStaleSimulated(admin, { olderThanMs: 5000 });
+  } catch (err) {
+    console.error("cron: sandbox settle failed", err?.message);
+    result.sandboxSettled = { error: "failed" };
+  }
+
+  // --- Job 6: sweep the SMS queue (last, so it also catches alerts raised by jobs 1-5) ---
   try {
     result.sms = await dispatchSms(admin, { limit: 50, budgetMs: 25000 });
   } catch (err) {

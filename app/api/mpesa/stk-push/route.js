@@ -2,19 +2,22 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stkPush } from "@/lib/mpesa";
+import { withCallbackToken } from "@/lib/callback-auth";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 // M-Pesa's own single-transaction ceiling.
 const MAX_DEPOSIT = 250_000;
 
 // Starts a real M-Pesa deposit: inserts a 'pending' ledger row, then asks
 // Daraja to push an STK prompt to the user's phone. The row only ever
-// becomes 'confirmed' when /api/mpesa/stk-callback hears back from Safaricom
-// — this route never marks money as received on its own. It returns the
-// ledger row's id so the app can follow that exact deposit (spinner ->
-// success screen), even across a page refresh.
+// becomes 'confirmed' when /api/mpesa/stk-callback (or a status query) hears
+// back from Safaricom - this route never marks money as received on its own.
+// It returns the ledger row's id so the app can follow that exact deposit
+// (spinner -> success screen), even across a page refresh. It deliberately does
+// NOT return Daraja's CheckoutRequestID: the browser has no need for it.
 export async function POST(request) {
-  // Fail loudly and cleanly on missing config, rather than letting
-  // createAdminClient() throw unhandled further down.
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json(
       { error: "Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is not set." },
@@ -59,7 +62,7 @@ export async function POST(request) {
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
     try {
-      const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/mpesa/stk-callback`;
+      const callbackUrl = withCallbackToken(`${process.env.NEXT_PUBLIC_APP_URL}/api/mpesa/stk-callback`);
       const result = await stkPush({
         phone: profile.phone,
         amount,
@@ -74,20 +77,16 @@ export async function POST(request) {
         .update({ mpesa_receipt_number: result.CheckoutRequestID })
         .eq("id", tx.id);
 
-      return NextResponse.json({
-        status: "pending",
-        transactionId: tx.id,
-        checkoutRequestId: result.CheckoutRequestID,
-      });
+      return NextResponse.json({ status: "pending", transactionId: tx.id });
     } catch (err) {
       await admin
         .from("ledger_transactions")
         .update({ mpesa_transaction_status: "failed", description: `Deposit failed: ${err.message}` })
-        .eq("id", tx.id);
+        .eq("id", tx.id)
+        .eq("mpesa_transaction_status", "pending");
       return NextResponse.json({ error: err.message }, { status: 502 });
     }
   } catch (err) {
-    // Last-resort net: whatever broke, the client still gets JSON with a real message.
     return NextResponse.json({ error: err.message || "Unexpected server error" }, { status: 500 });
   }
 }

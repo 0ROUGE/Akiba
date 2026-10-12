@@ -2,30 +2,26 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowDownToLine, ArrowUpFromLine, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionRow } from "@/components/transaction-row";
 import { AllowancePlans } from "@/components/allowance-plans";
 import { DepositFlow } from "@/components/deposit-flow";
+import { WithdrawFlow } from "@/components/withdraw-flow";
 import { formatKES } from "@/lib/utils";
 
-// STK Push / B2C initiation happen server-side in /api/mpesa/stk-push and
-// /api/mpesa/b2c. Deposits run through <DepositFlow> (waiting spinner, auto
-// success screen, survives refresh). Neither path ever marks a transaction
-// successful on its own - only Safaricom's callback (or a status query) does.
+// Deposits and withdrawals both run through the same flow component (waiting
+// spinner, automatic success screen with receipt download/share, survives a
+// refresh). Neither ever marks a transaction successful on its own - only
+// Safaricom's callback / a status query (or the labelled sandbox simulator) does.
 export default function BalancePage() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const [modal, setModal] = useState(null); // "deposit" | "withdraw" | null
-  const [amount, setAmount] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState(null);
 
   // Fetches data only - never touches the realtime channel, so calling this
   // on every change event can't multiply subscriptions.
@@ -41,7 +37,7 @@ export default function BalancePage() {
           .order("created_at", { ascending: false })
           .limit(20),
       ]);
-      setBalance(balanceRow?.balance ?? 0);
+      setBalance(Number(balanceRow?.balance ?? 0));
       setTransactions(txs ?? []);
     },
     [supabase]
@@ -79,55 +75,22 @@ export default function BalancePage() {
     };
   }, [supabase, loadData]);
 
-  // Opens the right modal straight away when linked to with ?action=deposit
-  // or ?action=withdraw - used by the dashboard quick actions and by the
-  // web+akiba: protocol handler.
+  // Opens the right flow straight away when linked to with ?action=deposit or
+  // ?action=withdraw - used by the dashboard quick actions and the web+akiba: handler.
   useEffect(() => {
     const action = searchParams.get("action");
     if (action === "deposit" || action === "withdraw") setModal(action);
   }, [searchParams]);
 
-  async function handleCheckStatus(transactionId) {
-    const res = await fetch("/api/mpesa/stk-status", {
+  async function checkStatus(url, transactionId) {
+    await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ transactionId }),
-    });
-    await res.json().catch(() => ({}));
+    }).catch(() => {});
     // Realtime will normally pick up the row change already, but refresh
     // explicitly too in case the websocket missed it.
     await reload();
-  }
-
-  async function handleWithdraw(e) {
-    e.preventDefault();
-    setSubmitting(true);
-    setFeedback(null);
-
-    let res;
-    let data;
-    try {
-      res = await fetch("/api/mpesa/b2c", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Number(amount) }),
-      });
-      data = await res.json().catch(() => ({}));
-    } catch {
-      // Withdrawals are never queued for later: money should only leave on a
-      // request the user can see go through right now.
-      setSubmitting(false);
-      setFeedback({ type: "error", text: "You're offline. Connect to the internet to withdraw." });
-      return;
-    }
-
-    setSubmitting(false);
-    if (!res.ok) {
-      setFeedback({ type: "error", text: data.error || "Couldn't reach M-Pesa right now. Try again shortly." });
-      return;
-    }
-    setFeedback({ type: "success", text: "Withdrawal requested — it'll land on your phone once confirmed." });
-    setAmount("");
   }
 
   return (
@@ -157,7 +120,9 @@ export default function BalancePage() {
                 <TransactionRow
                   key={tx.id}
                   tx={tx}
-                  onCheckStatus={tx.type === "deposit" ? handleCheckStatus : undefined}
+                  onCheckStatus={(id) =>
+                    checkStatus(tx.type === "deposit" ? "/api/mpesa/stk-status" : "/api/mpesa/b2c-status", id)
+                  }
                 />
               ))
             ) : (
@@ -175,58 +140,13 @@ export default function BalancePage() {
         onResume={() => setModal("deposit")}
         onSettled={reload}
       />
-
-      <AnimatePresence>
-        {modal === "withdraw" && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setModal(null)}
-          >
-            <motion.div
-              onClick={(e) => e.stopPropagation()}
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 340, damping: 32 }}
-              className="w-full max-w-sm rounded-t-2xl bg-card p-6 sm:rounded-2xl"
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-display text-lg font-medium">Withdraw</h3>
-                <button onClick={() => setModal(null)} aria-label="Close">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <form onSubmit={handleWithdraw} className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="amount">Amount (KES)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    min="1"
-                    step="1"
-                    required
-                    autoFocus
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
-                {feedback && (
-                  <p className={`text-sm ${feedback.type === "error" ? "text-danger" : "text-success"}`}>
-                    {feedback.text}
-                  </p>
-                )}
-                <Button type="submit" className="w-full" disabled={submitting}>
-                  {submitting ? "Sending…" : "Request withdrawal"}
-                </Button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <WithdrawFlow
+        open={modal === "withdraw"}
+        available={balance}
+        onClose={() => setModal(null)}
+        onResume={() => setModal("withdraw")}
+        onSettled={reload}
+      />
     </div>
   );
 }
