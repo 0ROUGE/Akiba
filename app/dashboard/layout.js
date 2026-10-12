@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { IdleLogoutGuard } from "@/components/idle-logout-guard";
 import { AwayLogoutGuard } from "@/components/away-logout-guard";
 import { SmsFlush } from "@/components/sms-flush";
+import { TransactionSuccess } from "@/components/transaction-success";
 
 export default async function DashboardLayout({ children }) {
   const supabase = createClient();
@@ -23,6 +24,7 @@ export default async function DashboardLayout({ children }) {
       <IdleLogoutGuard />
       <AwayLogoutGuard signedInAt={signedInAt} />
       <SmsFlush userId={user.id} />
+      <TransactionSuccess />
       <main className="pb-24 md:ml-60 md:pb-10 print:ml-0 print:pb-0">
         <div className="mx-auto max-w-3xl px-5 pt-8 sm:px-8">{children}</div>
       </main>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Share2, Copy, Printer, Check } from "lucide-react";
+import { Share2, Copy, Printer, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function ReceiptActions({ text }) {
+export function ReceiptActions({ text, pdfHref }) {
   const [copied, setCopied] = useState(false);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
@@ -28,8 +28,17 @@ export function ReceiptActions({ text }) {
 
   return (
     <div className="flex flex-wrap gap-2 print:hidden">
+      {pdfHref && (
+        <a
+          href={pdfHref}
+          download
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          <Download size={15} /> Download PDF
+        </a>
+      )}
       {canShare && (
-        <Button onClick={handleShare} className="gap-1.5">
+        <Button variant={pdfHref ? "outline" : "default"} onClick={handleShare} className="gap-1.5">
           <Share2 size={15} /> Share
         </Button>
       )}
@@ -37,7 +46,7 @@ export function ReceiptActions({ text }) {
         {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Copied" : "Copy"}
       </Button>
       <Button variant="outline" onClick={() => window.print()} className="gap-1.5">
-        <Printer size={15} /> Print / save PDF
+        <Printer size={15} /> Print
       </Button>
     </div>
   );

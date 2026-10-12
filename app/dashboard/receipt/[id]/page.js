@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReceiptActions } from "@/components/receipt-actions";
 import { formatKES } from "@/lib/utils";
+import { cleanDescription } from "@/lib/receipt-format";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -40,12 +41,13 @@ export default async function ReceiptPage({ params }) {
   if (!tx || tx.mpesa_transaction_status !== "confirmed") notFound();
 
   const label = TYPE_LABELS[tx.type] ?? "Transaction";
+  const description = cleanDescription(tx.description);
   const rows = [
     ["Type", label],
     ["Amount", formatKES(tx.amount)],
     ["Date", formatWhen(tx.created_at)],
     ...(tx.mpesa_receipt_number ? [["M-Pesa receipt no.", tx.mpesa_receipt_number]] : []),
-    ...(tx.description ? [["Description", tx.description]] : []),
+    ...(description ? [["Description", description]] : []),
     ["AKIBA reference", tx.id.slice(0, 8).toUpperCase()],
   ];
 
@@ -84,7 +86,7 @@ export default async function ReceiptPage({ params }) {
         </CardContent>
       </Card>
 
-      <ReceiptActions text={shareText} />
+      <ReceiptActions text={shareText} pdfHref={`/api/receipts/${tx.id}/pdf`} />
     </div>
   );
 }
