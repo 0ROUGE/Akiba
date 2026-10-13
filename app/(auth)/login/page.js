@@ -13,6 +13,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { supportsPlatformPasskey, describePasskeyError } from "@/lib/webauthn-support";
 
 const PREFILL_KEY = "akiba_prefill_email";
+const PASSKEY_HINT_KEY = "akiba_pk_supported";
 
 function friendlyAuthError(error) {
   const msg = error?.message || "";
@@ -40,8 +41,24 @@ export default function LoginPage() {
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
 
+  // The device check is async, so the biometric button used to pop in late. Remember the
+  // last answer and show the button instantly, then confirm it in the background.
   useEffect(() => {
-    supportsPlatformPasskey().then(setPasskeySupported);
+    try {
+      if (window.localStorage.getItem(PASSKEY_HINT_KEY) === "1") setPasskeySupported(true);
+    } catch {
+      /* storage blocked - fall back to the async check */
+    }
+    supportsPlatformPasskey()
+      .then((ok) => {
+        setPasskeySupported(ok);
+        try {
+          window.localStorage.setItem(PASSKEY_HINT_KEY, ok ? "1" : "0");
+        } catch {
+          /* ignore */
+        }
+      })
+      .catch(() => setPasskeySupported(false));
   }, []);
 
   // Read ?exists=1 / ?reset=1 / ?reason=away straight from the URL (rather than
@@ -69,12 +86,17 @@ export default function LoginPage() {
     setPasskeyLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPasskey();
-      setPasskeyLoading(false);
       if (error) {
+        setPasskeyLoading(false);
         const message = describePasskeyError(error, { mode: "signin" });
         if (message) setError(message);
         return;
       }
+      // A passkey is device-bound and phishing-resistant, so when the server can prove this
+      // session came from one (enrolled >= 24h ago) it skips the authenticator code. If it
+      // can't prove it, nothing is lost: the dashboard simply asks for the TOTP code as before.
+      await fetch("/api/2fa/passkey-ok", { method: "POST" }).catch(() => {});
+      setPasskeyLoading(false);
       router.replace("/dashboard");
       router.refresh();
     } catch {

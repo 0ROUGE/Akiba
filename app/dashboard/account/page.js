@@ -14,6 +14,7 @@ import { SettingsRow } from "@/components/settings-row";
 import { AutoSaveManager } from "@/components/auto-save-manager";
 import { DepositReminderManager } from "@/components/deposit-reminder-manager";
 import { WithdrawalLimitManager } from "@/components/withdrawal-limit-manager";
+import { WithdrawalPinManager } from "@/components/withdrawal-pin-manager";
 import { useT } from "@/components/language-provider";
 import { LANGS, LANG_LABELS } from "@/lib/i18n";
 
@@ -219,6 +220,7 @@ export default function AccountPage() {
           <CardContent className="divide-y divide-border p-0">
             <AutoSaveManager />
             <DepositReminderManager />
+            <WithdrawalPinManager />
             <WithdrawalLimitManager profile={profile} onSaved={loadProfile} />
             <SettingsRow icon={FileText} label={t("account.statements")} href="/dashboard/statement" />
           </CardContent>

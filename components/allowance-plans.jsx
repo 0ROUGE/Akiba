@@ -8,11 +8,15 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { StepUpDialog } from "@/components/step-up-dialog";
 import { formatKES, formatDate } from "@/lib/utils";
 
+const STEP_CODES = ["STEP_UP_REQUIRED", "PIN_REQUIRED"];
+
 // Lock a sum out of your balance now; it pays itself back out to your phone
-// on a daily or weekly drip automatically — like setting your own allowance
+// on a daily or weekly drip automatically - like setting your own allowance
 // instead of having to remember to ration one lump sum yourself.
+// Creating or cancelling a plan is a cash-out, so it asks for the withdrawal PIN.
 export function AllowancePlans({ balance }) {
   const supabase = createClient();
   const router = useRouter();
@@ -20,7 +24,9 @@ export function AllowancePlans({ balance }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [cancelError, setCancelError] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
+  const [stepUp, setStepUp] = useState(null); // { mode, retry }
   const [form, setForm] = useState({ label: "", totalAmount: "", frequency: "weekly", amountPerRelease: "" });
 
   const load = useCallback(async () => {
@@ -44,25 +50,40 @@ export function AllowancePlans({ balance }) {
     return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   }
 
-  async function handleCreate(e) {
-    e.preventDefault();
+  function askStepUp(code, retry) {
+    setStepUp({ mode: code === "PIN_REQUIRED" ? "set" : "verify", retry });
+  }
+
+  async function createPlan() {
     setSubmitting(true);
     setError("");
 
-    const res = await fetch("/api/payout-schedules", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        label: form.label || null,
-        totalAmount: Number(form.totalAmount),
-        frequency: form.frequency,
-        amountPerRelease: Number(form.amountPerRelease),
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
+    let res;
+    let data;
+    try {
+      res = await fetch("/api/payout-schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: form.label || null,
+          totalAmount: Number(form.totalAmount),
+          frequency: form.frequency,
+          amountPerRelease: Number(form.amountPerRelease),
+        }),
+      });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      setSubmitting(false);
+      setError("You're offline. Connect to the internet and try again.");
+      return;
+    }
     setSubmitting(false);
 
     if (!res.ok) {
+      if (STEP_CODES.includes(data.code)) {
+        askStepUp(data.code, createPlan);
+        return;
+      }
       setError(data.error || "Couldn't create that plan.");
       return;
     }
@@ -72,10 +93,35 @@ export function AllowancePlans({ balance }) {
     router.refresh(); // balance card on Home reads from the server
   }
 
+  function handleCreate(e) {
+    e.preventDefault();
+    createPlan();
+  }
+
   async function handleCancel(id) {
     setCancellingId(id);
-    await fetch(`/api/payout-schedules/${id}/cancel`, { method: "POST" });
+    setCancelError("");
+
+    let res;
+    let data;
+    try {
+      res = await fetch(`/api/payout-schedules/${id}/cancel`, { method: "POST" });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      setCancellingId(null);
+      setCancelError("You're offline. Connect to the internet and try again.");
+      return;
+    }
     setCancellingId(null);
+
+    if (!res.ok) {
+      if (STEP_CODES.includes(data.code)) {
+        askStepUp(data.code, () => handleCancel(id));
+        return;
+      }
+      setCancelError(data.error || "Couldn't cancel that plan.");
+      return;
+    }
     await load();
     router.refresh();
   }
@@ -90,6 +136,12 @@ export function AllowancePlans({ balance }) {
           <Plus size={15} /> New plan
         </button>
       </div>
+
+      {cancelError && (
+        <p role="alert" className="mb-3 text-sm text-danger">
+          {cancelError}
+        </p>
+      )}
 
       {activePlans.length ? (
         <div className="space-y-3">
@@ -167,8 +219,16 @@ export function AllowancePlans({ balance }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="plan-total">Total to lock in (KES)</Label>
-                  <Input id="plan-total" type="number" min="1" required value={form.totalAmount} onChange={update("totalAmount")} />
-                  <p className="text-xs text-muted-foreground">Available: {formatKES(balance)}</p>
+                  <Input
+                    id="plan-total"
+                    type="number"
+                    min="1"
+                    step="1"
+                    required
+                    value={form.totalAmount}
+                    onChange={update("totalAmount")}
+                  />
+                  <p className="text-xs text-muted-foreground">Available: {formatKES(balance)} · whole shillings only</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="plan-frequency">Release</Label>
@@ -188,28 +248,41 @@ export function AllowancePlans({ balance }) {
                     id="plan-amount"
                     type="number"
                     min="1"
+                    step="1"
                     required
                     value={form.amountPerRelease}
                     onChange={update("amountPerRelease")}
                   />
                   {form.totalAmount && form.frequency === "daily" && (
                     <p className="text-xs text-muted-foreground">
-                      e.g. {formatKES(Number(form.totalAmount) / 7)}/day splits it evenly over a week
+                      e.g. about {formatKES(Math.floor(Number(form.totalAmount) / 7))}/day spreads it over a week
                     </p>
                   )}
                 </div>
-                {error && <p className="text-sm text-danger">{error}</p>}
+                {error && <p role="alert" className="text-sm text-danger">{error}</p>}
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? "Locking in…" : "Start plan"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Each release is a real M-Pesa payout to your phone, sent automatically — no need to come back and withdraw it yourself.
+                  Each release is a real M-Pesa payout to your phone, sent automatically — no need to come back and withdraw it yourself. Starting a plan needs your withdrawal PIN.
                 </p>
               </form>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <StepUpDialog
+        open={Boolean(stepUp)}
+        mode={stepUp?.mode ?? "verify"}
+        hasPin={stepUp?.mode !== "set"}
+        onClose={() => setStepUp(null)}
+        onDone={() => {
+          const retry = stepUp?.retry;
+          setStepUp(null);
+          retry?.();
+        }}
+      />
     </section>
   );
 }

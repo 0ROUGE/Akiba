@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { releaseInstallment } from "@/lib/payouts";
+import { checkWithdrawalGate, clearStepUp } from "@/lib/step-up";
 
-// Cancelling a plan pays out whatever's left right away, as one final
-// release, rather than leaving locked funds stranded with no way back to
-// spendable balance — "cancel" means "give me the rest now," not "forfeit it."
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+// Cancelling a plan pays out whatever's left right away, as one final release, rather
+// than leaving locked funds stranded - "cancel" means "give me the rest now", not
+// "forfeit it". That is a cash-out, so it needs the same PIN / biometric confirmation.
 export async function POST(request, { params }) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json(
@@ -22,6 +26,10 @@ export async function POST(request, { params }) {
     if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
     const admin = createAdminClient();
+
+    const gate = await checkWithdrawalGate(request, admin, user.id);
+    if (!gate.ok) return NextResponse.json({ error: gate.error, code: gate.code }, { status: 403 });
+
     const { data: schedule } = await admin
       .from("payout_schedules")
       .select("*")
@@ -49,7 +57,9 @@ export async function POST(request, { params }) {
       await admin.from("payout_schedules").update({ status: "cancelled" }).eq("id", schedule.id);
     }
 
-    return NextResponse.json({ cancelled: true, releasedRemaining: remaining });
+    const response = NextResponse.json({ cancelled: true, releasedRemaining: remaining });
+    clearStepUp(response);
+    return response;
   } catch (err) {
     return NextResponse.json({ error: err.message || "Unexpected server error" }, { status: 500 });
   }

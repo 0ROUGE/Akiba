@@ -10,18 +10,21 @@ import { TransactionRow } from "@/components/transaction-row";
 import { AllowancePlans } from "@/components/allowance-plans";
 import { DepositFlow } from "@/components/deposit-flow";
 import { WithdrawFlow } from "@/components/withdraw-flow";
+import { StepUpDialog } from "@/components/step-up-dialog";
 import { formatKES } from "@/lib/utils";
 
 // Deposits and withdrawals both run through the same flow component (waiting
 // spinner, automatic success screen with receipt download/share, survives a
 // refresh). Neither ever marks a transaction successful on its own - only
 // Safaricom's callback / a status query (or the labelled sandbox simulator) does.
+// Withdrawals first ask for the withdrawal PIN (or a biometric check).
 export default function BalancePage() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const [modal, setModal] = useState(null); // "deposit" | "withdraw" | null
+  const [stepUp, setStepUp] = useState(null); // { mode: "verify" | "set", retry }
 
   // Fetches data only - never touches the realtime channel, so calling this
   // on every change event can't multiply subscriptions.
@@ -146,6 +149,21 @@ export default function BalancePage() {
         onClose={() => setModal(null)}
         onResume={() => setModal("withdraw")}
         onSettled={reload}
+        onNeedStepUp={(code, retry) =>
+          setStepUp({ mode: code === "PIN_REQUIRED" ? "set" : "verify", retry })
+        }
+      />
+
+      <StepUpDialog
+        open={Boolean(stepUp)}
+        mode={stepUp?.mode ?? "verify"}
+        hasPin={stepUp?.mode !== "set"}
+        onClose={() => setStepUp(null)}
+        onDone={() => {
+          const retry = stepUp?.retry;
+          setStepUp(null);
+          retry?.();
+        }}
       />
     </div>
   );

@@ -16,15 +16,25 @@ export default function Verify2FAPage() {
     e.preventDefault();
     setError("");
     setVerifying(true);
-    const res = await fetch("/api/2fa/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json().catch(() => ({}));
+    let res;
+    let data = {};
+    try {
+      res = await fetch("/api/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      setVerifying(false);
+      setError("Couldn't reach the server. Check your connection and try again.");
+      return;
+    }
     setVerifying(false);
     if (!res.ok || !data.verified) {
-      setError("That code didn't match. Check your app and try again.");
+      // The server says how many tries are left, or how long the lock lasts.
+      setError(data.error || "That code didn't match. Check your app and try again.");
+      setCode("");
       return;
     }
     router.replace("/dashboard");
@@ -60,7 +70,7 @@ export default function Verify2FAPage() {
               className="text-center text-lg tracking-[0.5em]"
             />
           </div>
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p role="alert" className="text-sm text-danger">{error}</p>}
           <Button type="submit" className="w-full" disabled={verifying || code.length !== 6}>
             {verifying ? "Verifying…" : "Verify"}
           </Button>
