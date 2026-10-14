@@ -17,6 +17,23 @@ import {
 
 const SEEN_KEY = "akiba_seen_tx";
 
+// The deposit / withdrawal screens (components/mpesa-flow.jsx) remember the transaction
+// they are showing under these keys. While one is on screen it owns the success
+// message, so this global popup must stay quiet for it - otherwise the user would see
+// two "success" screens stacked on top of each other.
+const FLOW_KEYS = ["akiba_active_deposit", "akiba_active_withdrawal"];
+
+function isTrackedByFlow(id) {
+  try {
+    return FLOW_KEYS.some((key) => {
+      const saved = JSON.parse(window.localStorage.getItem(key) || "null");
+      return saved && saved.id === id;
+    });
+  } catch {
+    return false;
+  }
+}
+
 function readSeen() {
   try {
     const list = JSON.parse(window.localStorage.getItem(SEEN_KEY) || "[]");
@@ -61,6 +78,7 @@ export function TransactionSuccess() {
 
       const onChange = (payload) => {
         const row = payload.new;
+        if (row && isTrackedByFlow(row.id)) return; // the flow screen is already showing this one
         const seen = [...readSeen(), ...seenRef.current];
         if (!shouldAnnounceTransaction(row, seen)) return;
         seenRef.current.add(row.id);
