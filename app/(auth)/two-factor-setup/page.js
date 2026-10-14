@@ -21,31 +21,48 @@ export default function TwoFactorSetupPage() {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/2fa/generate", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError("Couldn't start 2FA setup. Refresh to try again.");
-      } else {
-        setOtpauthUrl(data.otpauth_url);
-        setManualKey(data.manual_key);
+      try {
+        const res = await fetch("/api/2fa/generate", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          // Already set up - never replace a working authenticator. On to the app.
+          router.replace("/dashboard");
+          return;
+        }
+        if (!res.ok) {
+          setError("Couldn't start 2FA setup. Refresh to try again.");
+        } else {
+          setOtpauthUrl(data.otpauth_url);
+          setManualKey(data.manual_key);
+        }
+      } catch {
+        setError("Couldn't start 2FA setup. Check your connection and refresh.");
       }
       setLoading(false);
     })();
-  }, []);
+  }, [router]);
 
   async function handleVerify(e) {
     e.preventDefault();
     setError("");
     setVerifying(true);
-    const res = await fetch("/api/2fa/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json().catch(() => ({}));
+    let res;
+    let data = {};
+    try {
+      res = await fetch("/api/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      setVerifying(false);
+      setError("Couldn't reach the server. Check your connection and try again.");
+      return;
+    }
     setVerifying(false);
     if (!res.ok || !data.verified) {
-      setError("That code didn't match. Check your app and try again.");
+      setError(data.error || "That code didn't match. Check your app and try again.");
       return;
     }
     router.replace("/dashboard");
@@ -96,7 +113,7 @@ export default function TwoFactorSetupPage() {
             />
           </div>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && otpauthUrl && <p role="alert" className="text-sm text-danger">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={verifying || code.length !== 6}>
             {verifying ? "Verifying…" : "Verify and continue"}

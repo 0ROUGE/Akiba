@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LogOut, ShieldCheck, KeyRound, Bell, Send, Languages, FileText } from "lucide-react";
+import { LogOut, ShieldCheck, KeyRound, Bell, Send, Languages, FileText, HelpCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { subscribeToPush } from "@/lib/push";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { AutoSaveManager } from "@/components/auto-save-manager";
 import { DepositReminderManager } from "@/components/deposit-reminder-manager";
 import { WithdrawalLimitManager } from "@/components/withdrawal-limit-manager";
 import { WithdrawalPinManager } from "@/components/withdrawal-pin-manager";
+import { NotificationPrefsManager } from "@/components/notification-prefs-manager";
 import { useT } from "@/components/language-provider";
 import { LANGS, LANG_LABELS } from "@/lib/i18n";
 
@@ -209,6 +210,7 @@ export default function AccountPage() {
               onClick={handleSendTest}
             />
           )}
+          <NotificationPrefsManager />
         </CardContent>
       </Card>
 
@@ -229,6 +231,7 @@ export default function AccountPage() {
 
       <Card>
         <CardContent className="divide-y divide-border p-0">
+          <SettingsRow icon={HelpCircle} label="Help & FAQ" href="/dashboard/help" />
           <SettingsRow icon={Languages} label={t("account.language")} value={LANG_LABELS[lang]} onClick={cycleLanguage} />
           <div className="flex items-center justify-between px-5 py-4">
             <span className="text-sm font-medium">{t("account.appearance")}</span>

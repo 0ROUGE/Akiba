@@ -23,8 +23,9 @@ export const maxDuration = 60;
 //    directly what really happened to them (fallback for missed callbacks)
 // 3. Runs due auto-save rules (moves AKIBA balance into goals)
 // 4. Sends today's deposit reminders
-// 5. Settles sandbox (simulated) withdrawals nobody is waiting on any more
-// 6. Sweeps the SMS queue (retries, feature broadcasts, anything not yet sent)
+// 5. On the 1st of the month (Nairobi time) sends last month's summary
+// 6. Settles sandbox (simulated) withdrawals nobody is waiting on any more
+// 7. Sweeps the SMS queue (retries, feature broadcasts, anything not yet sent)
 //
 // Auth: Vercel's cron sends `Authorization: Bearer $CRON_SECRET`. The route
 // FAILS CLOSED: with no CRON_SECRET configured it refuses to run at all.
@@ -130,7 +131,17 @@ export async function GET(request) {
     result.reminders = { error: "failed" };
   }
 
-  // --- Job 5: settle abandoned sandbox withdrawals ---
+  // --- Job 5: monthly summary (the database only returns rows on the 1st, once per user) ---
+  try {
+    const { data: events, error } = await admin.rpc("run_monthly_summaries");
+    if (error) throw error;
+    result.monthlySummary = { events: Array.isArray(events) ? events.length : 0, notified: await deliver(admin, events) };
+  } catch (err) {
+    console.error("cron: monthly summary failed", err?.message);
+    result.monthlySummary = { error: "failed" };
+  }
+
+  // --- Job 6: settle abandoned sandbox withdrawals ---
   try {
     result.sandboxSettled = await settleStaleSimulated(admin, { olderThanMs: 5000 });
   } catch (err) {
@@ -138,7 +149,7 @@ export async function GET(request) {
     result.sandboxSettled = { error: "failed" };
   }
 
-  // --- Job 6: sweep the SMS queue (last, so it also catches alerts raised by jobs 1-5) ---
+  // --- Job 7: sweep the SMS queue (last, so it also catches alerts raised by jobs 1-6) ---
   try {
     result.sms = await dispatchSms(admin, { limit: 50, budgetMs: 25000 });
   } catch (err) {

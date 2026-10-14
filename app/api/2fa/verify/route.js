@@ -11,6 +11,7 @@ export const maxDuration = 30;
 // initial setup (flips two_factor_enabled on first success) and on every later login
 // (confirms the code and marks this session as having passed 2FA via a SIGNED httpOnly
 // cookie). Guessing is rate-limited: 5 wrong codes lock TOTP for 15 minutes, doubling.
+// two_factor_enabled is written with the service role - browsers can no longer touch it.
 export async function POST(request) {
   try {
     const supabase = createClient();
@@ -45,13 +46,14 @@ export async function POST(request) {
       );
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await admin
       .from("profiles")
       .select("two_factor_enabled")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
     if (!profile?.two_factor_enabled) {
-      await supabase.from("profiles").update({ two_factor_enabled: true }).eq("id", user.id);
+      const { error } = await admin.from("profiles").update({ two_factor_enabled: true }).eq("id", user.id);
+      if (error) throw new Error(error.message);
     }
 
     const response = NextResponse.json({ verified: true });
