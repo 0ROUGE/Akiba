@@ -3,6 +3,7 @@ import { PlusCircle, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BalanceCard } from "@/components/balance-card";
 import { GoalCard } from "@/components/goal-card";
+import { NextDeadlineWidget } from "@/components/goal-countdown";
 import { TransactionRow } from "@/components/transaction-row";
 import { NewGoalDialog } from "@/components/new-goal-dialog";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ export default async function DashboardHomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: profile }, { data: balanceRow }, { data: goals }, { data: transactions }] =
+  const [{ data: profile }, { data: balanceRow }, { data: goals }, { data: transactions }, { data: deadlineGoals }] =
     await Promise.all([
       supabase.from("profiles").select("full_name").eq("id", user.id).single(),
       supabase.from("akiba_balances").select("balance").eq("user_id", user.id).maybeSingle(),
@@ -30,6 +31,15 @@ export default async function DashboardHomePage() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(5),
+      // The open goal with the nearest deadline, for the countdown widget.
+      supabase
+        .from("savings_goals")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("completed", false)
+        .not("target_date", "is", null)
+        .order("target_date", { ascending: true })
+        .limit(1),
     ]);
 
   const pendingCount =
@@ -63,6 +73,8 @@ export default async function DashboardHomePage() {
         <NewGoalDialog />
       </div>
 
+      <NextDeadlineWidget goal={deadlineGoals?.[0]} />
+
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-lg font-medium">Savings goals</h2>
@@ -89,8 +101,8 @@ export default async function DashboardHomePage() {
       <section>
         <div className="mb-1 flex items-center justify-between">
           <h2 className="font-display text-lg font-medium">Recent activity</h2>
-          <Link href="/dashboard/spending" className="text-sm font-medium text-primary">
-            View all
+          <Link href="/dashboard/activity" className="text-sm font-medium text-primary">
+            Search all
           </Link>
         </div>
         <Card>
