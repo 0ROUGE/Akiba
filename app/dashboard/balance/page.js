@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -115,7 +116,12 @@ export default function BalancePage() {
       <AllowancePlans balance={balance} />
 
       <section>
-        <h2 className="mb-1 font-display text-lg font-medium">Transaction history</h2>
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="font-display text-lg font-medium">Transaction history</h2>
+          <Link href="/dashboard/activity" className="text-sm font-medium text-primary">
+            Search all
+          </Link>
+        </div>
         <Card>
           <CardContent className="divide-y divide-border p-0 px-5">
             {transactions.length ? (
