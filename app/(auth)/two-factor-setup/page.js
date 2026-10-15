@@ -94,7 +94,7 @@ export default function TwoFactorSetupPage() {
           )}
           {manualKey && (
             <p className="mt-4 break-all text-center text-xs text-muted-foreground">
-              Can&apos;t scan? In the app choose "Enter a setup key" and type: <span className="font-mono">{manualKey}</span>
+              Can&apos;t scan? In the app choose &ldquo;Enter a setup key&rdquo; and type: <span className="font-mono">{manualKey}</span>
             </p>
           )}
         </div>
