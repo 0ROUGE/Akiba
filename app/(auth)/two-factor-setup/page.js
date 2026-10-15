@@ -30,7 +30,8 @@ export default function TwoFactorSetupPage() {
           return;
         }
         if (!res.ok) {
-          setError("Couldn't start 2FA setup. Refresh to try again.");
+          // Show the server's real reason when it gave one, instead of a vague message.
+          setError(data.error || "Couldn't start 2FA setup. Refresh to try again.");
         } else {
           setOtpauthUrl(data.otpauth_url);
           setManualKey(data.manual_key);
@@ -80,7 +81,7 @@ export default function TwoFactorSetupPage() {
         <p className="text-sm font-medium text-primary">Step 2 of 2</p>
         <h1 className="mt-2 font-display text-2xl font-semibold">Set up two-factor login</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Required before your first deposit. Scan this with Google Authenticator, Authy, or similar.
+          Required before your first deposit. Install an authenticator app (Google Authenticator, Microsoft Authenticator or Authy), then scan this code from inside the app.
         </p>
 
         <div className="mt-6 flex flex-col items-center rounded-xl border border-border bg-card p-6">
@@ -89,11 +90,11 @@ export default function TwoFactorSetupPage() {
           ) : otpauthUrl ? (
             <QRCodeSVG value={otpauthUrl} size={176} />
           ) : (
-            <p className="text-sm text-danger">{error}</p>
+            <p role="alert" className="text-center text-sm text-danger">{error}</p>
           )}
           {manualKey && (
             <p className="mt-4 break-all text-center text-xs text-muted-foreground">
-              Can&apos;t scan? Enter manually: <span className="font-mono">{manualKey}</span>
+              Can&apos;t scan? In the app choose "Enter a setup key" and type: <span className="font-mono">{manualKey}</span>
             </p>
           )}
         </div>
@@ -115,7 +116,7 @@ export default function TwoFactorSetupPage() {
 
           {error && otpauthUrl && <p role="alert" className="text-sm text-danger">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={verifying || code.length !== 6}>
+          <Button type="submit" className="w-full" disabled={verifying || code.length !== 6 || !otpauthUrl}>
             {verifying ? "Verifying…" : "Verify and continue"}
           </Button>
         </form>

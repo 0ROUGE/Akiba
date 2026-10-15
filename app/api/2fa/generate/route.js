@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import * as OTPAuth from "otpauth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { encryptSecret } from "@/lib/crypto";
+import { encryptSecret, isEncryptionConfigError } from "@/lib/crypto";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -58,6 +58,12 @@ export async function POST() {
     );
   } catch (err) {
     console.error("2fa generate failed:", err?.message);
+    if (isEncryptionConfigError(err)) {
+      return NextResponse.json(
+        { error: "Two-factor setup isn't configured on the server yet (no encryption key). Please contact support.", code: "CONFIG" },
+        { status: 500 }
+      );
+    }
     return NextResponse.json({ error: "Couldn't start 2FA setup. Please try again." }, { status: 500 });
   }
 }
