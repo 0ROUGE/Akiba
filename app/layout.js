@@ -23,6 +23,11 @@ export const metadata = {
   description:
     "AKIBA turns your M-Pesa deposits into goals, allowances, and spending you control.",
   manifest: "/manifest.json",
+  // Renders <meta name="google-site-verification" content="..."> on every page,
+  // which is how Google Search Console confirms you own the site.
+  verification: {
+    google: "OTstAuAuqRP9wsZQ0mKtEFDAZ-_WpjfVIjBcFb7DQZE",
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
